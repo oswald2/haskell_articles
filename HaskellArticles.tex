@@ -1,0 +1,430 @@
+%% Buchvorlage unter Verwendung der Book-Klasse des KOMA-Script      %%
+%% Basierend auf einer TeXNicCenter-Vorlage von Mark Müller          %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Wählen Sie die Optionen aus, indem Sie % vor der Option entfernen  
+% Dokumentation des KOMA-Script-Packets: scrguide
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Optionen zum Layout des Buchs                                     %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[
+%a5paper,							% alle weiteren Papierformat einstellbar
+%landscape,						% Querformat
+12pt,								% Schriftgröße (12pt, 11pt (Standard))
+%BCOR1cm,							% Bindekorrektur, bspw. 1 cm
+%DIVcalc,							% führt die Satzspiegelberechnung neu aus
+%											  s. scrguide 2.4
+%oneside,							% einseitiges Layout
+%twocolumn,						% zweispaltiger Satz
+%openany,							% Kapitel können auch auf linken Seiten beginnen
+%halfparskip*,				% Absatzformatierung s. scrguide 3.1
+%headsepline,					% Trennline zum Seitenkopf	
+%footsepline,					% Trennline zum Seitenfuß
+%notitlepage,					% in-page-Titel, keine eigene Titelseite
+%chapterprefix,				% vor Kapitelüberschrift wird "Kapitel Nummer" gesetzt
+%appendixprefix,				% Anhang wird "Anhang" vor die Überschrift gesetzt 
+%normalheadings,			% Überschriften etwas kleiner (smallheadings)
+idxtotoc,						% Index im Inhaltsverzeichnis
+liststotoc,					% Abb.- und Tab.verzeichnis im Inhalt
+bibtotoc,						% Literaturverzeichnis im Inhalt
+%leqno,								% Nummerierung von Gleichungen links
+%fleqn,								% Ausgabe von Gleichungen linksbündig
+%draft								% überlangen Zeilen in Ausgabe gekennzeichnet
+]
+{scrreprt}
+
+%\pagestyle{empty}		% keine Kopf und Fußzeile (k. Seitenzahl)
+%\pagestyle{headings}	% lebender Kolumnentitel  
+
+%% Fonts für pdfLaTeX, falls keine cm-super-Fonts installiert%%%%%%%%%
+
+%% Packages für Grafiken & Abbildungen %%%%%%%%%%%%%%%%%%%%%%
+\usepackage[pdftex]{graphicx} %%Grafiken in pdfLaTeX
+
+
+
+%% optischer Randausgleich, falls pdflatex verwandt %%%%%%%%%%%%%%%%%%%
+\usepackage[activate]{pdfcprot}				
+
+\usepackage[dvipsnames]{xcolor}
+
+
+\usepackage[T1]{fontenc}   % T1-Kodierung des Zeichensatzes
+\usepackage[latin1]{inputenc} % Eingabekodierung (Linux)
+\usepackage{
+  ,soul         % Sperren, Unterstreichen, Durchstreichen ...
+  ,array        % Erweiterungen für Tabellen
+  ,booktabs     %       "        "      "
+  ,supertabular % Mehrseitige Tabellen
+  ,longtable    %      "          "    
+  ,colortbl     % Farben in Tabellenzellen
+  ,tabularx
+  ,textcomp     % Zusätzliche (Sonder)Zeichen
+  ,natbib       % Formatierung der Zitate
+  ,calc         % Rechnen mit LaTeX-Längen und -Zählern
+  ,url          % URLs setzen
+  ,tocloft      % Verzeichnisse (TOC, LOF, LOT) formatieren
+  ,graphicx     % Grafiken einbinden
+  ,paralist     % Zusätzliche Listen-Umgebungen
+  ,multicol     % Mehrspaltensatz
+  ,ragged2e     % Bessere Trennung bei Flattersatz
+  ,pst-3d       % Für das Beispiel der verschrägten Aufrechten
+  ,pst-pdf      % PostScript-Code mit pdflatex verwenden
+  ,fixltx2e     % Korrigiert Fehler und erweitert LaTeX2e
+  ,cmap         % verbessert das Kopieren aus PDF-Anzeigeprogrammen und
+                % das Durchsuchen von PDF-Dateien 
+  ,makeidx      % Index-Erzeugung
+}
+
+
+
+\usepackage{textcomp}
+\usepackage{lmodern}
+\usepackage[sc, osf]{mathpazo}
+\usepackage{amsmath}
+
+%% deutsche Anpassung %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[english,ngerman]{babel}		
+\usepackage{multirow,bigdelim} 
+\usepackage[paper=a4paper,left=25mm,right=25mm,top=20mm,bottom=28mm]{geometry} 
+\usepackage{niceframe}
+\usepackage[ngerman]{varioref}      % »Intelligente« Querverweise
+\usepackage{tabulary}
+
+\usepackage{wrapfig}
+
+
+% Neue Option »C« für longtable, um Tabellen > \textwidth auf der Seite
+% zu zentrieren (Heiko Oberdiek in <d892mm$9nq$1@news.BelWue.DE>) unter
+% Berücksichtigung des im Rand zur Verfügung stehenden Freiraums (Markus
+% Kohm in <1780717.PVTQaRvHTA@mjk.komascript.de>). 
+\makeatletter
+\let\ORG@LT@array\LT@array
+\def\LT@array[#1]{%
+  \if C#1%
+    \setlength{\@tempdima}{\oddsidemargin}
+    \addtolength{\@tempdima}{1in}
+    \LTleft=0pt plus 1fill minus \@tempdima
+    \LTright=\LTleft
+    \expandafter\ORG@LT@array\expandafter[\expandafter x\expandafter]%
+  \else
+    \@ReturnAfterFi{%
+      \ORG@LT@array[{#1}]%
+    }%
+  \fi
+}
+\long\def\@ReturnAfterFi#1\fi{\fi#1}
+\makeatother
+
+
+
+% um Tabellenspalten mit Flattersatz zu setzen, muss \\ vor
+% (z.B.) \raggedright geschützt werden:
+\newcommand{\PreserveBackslash}[1]{\let\temp=\\#1\let\\=\temp}
+%
+% Spalten mit Flattersatz:
+% Linksbündig:\chapter{Massage}
+\newcolumntype{L}[1]{>{\PreserveBackslash\RaggedRight}m{#1}}
+\newcolumntype{M}[1]{>{\PreserveBackslash\RaggedRight}p{#1}}
+% Rechtsbündig (nicht verwendet im Dokument):
+\newcolumntype{R}[1]{>{\PreserveBackslash\RaggedLeft}m{#1}}
+\newcolumntype{S}[1]{>{\PreserveBackslash\RaggedLeft}p{#1}}
+% Zentriert (nicht verwendet im Dokument):
+\newcolumntype{Z}[1]{>{\PreserveBackslash\Centering}m{#1}}
+\newcolumntype{A}[1]{>{\PreserveBackslash\Centering}p{#1}}
+
+% Tabellen mit grauem Header und grauer hline am Ende und entsprechend
+% eingestellten Schriften (in diesem Fall nur fett); Verwendung über
+% \hdrow (s.u.)
+%
+% Linksbündig:
+\newcolumntype{H}{>{\fontseries{b}\selectfont%
+    \columncolor[gray]{.8}[6pt][0pt]}l}
+% Zentriert (nicht verwendet im Dokument):
+\newcolumntype{I}{>{\fontseries{b}\selectfont%
+    \columncolor[gray]{.8}[6pt][0pt]}c}
+% Rechtsbündig (nicht verwendet im Dokument):
+\newcolumntype{J}{>{\fontseries{b}\selectfont%
+    \columncolor[gray]{.8}[6pt][0pt]}r}
+%
+\newcommand{\hdrow}[2]{%
+  \multicolumn{1}{#1@{}}{%
+    \raisebox{.1mm}{% Ausrichtung der Beschriftung
+      #2%
+    }\rule{0pt}{4mm}}% unsichtbare Linie, die die Kopfzeile höher macht
+} 
+
+% Alternative ohne \multicolumn und \columncolor, direkt über \rowcolor:
+%\newcommand{\Hdrow}[1]{\rowcolor[gray]{.8}#1 \\\addlinespace}\chapter{Massage}
+\newenvironment{tabelle}[2][c]{%
+  \renewcommand{\arraystretch}{1.2} % Größere Abstände zwischen Zeilen
+  \sffamily\small                   % Serifenlose und kleine Schrift
+  \begin{longtable}[#1]{#2}
+  }
+  {\end{longtable}\renewcommand{\arraystretch}{1}% Abstände wieder
+                                                 % zurücksetzen 
+  \normalsize\rmfamily % Schrift wieder zurücksetzen
+  }
+
+% Auch »Abbildung« und nicht nur die Nummer wird zum Link (abgeleitet
+% aus Posting von Heiko Oberdiek (d09n5p$9md$1@news.BelWue.DE);
+% Verwendung: In \abbvref{label} ist ein Beispiel dargestellt
+\providecommand*{\abbvrefname}{Abbildung}
+\newcommand*{\abbvref}[1]{%
+  \hyperref[#1]{\abbvrefname}\vref{#1}%
+}
+
+
+
+\usepackage[%
+  breaklinks               % Links »überstehen« Zeilenumbruch
+  ,backref                 % Backlinks im Literaturverzeichnis
+  ,colorlinks              % Links erhalten Farben statt Kästen
+  ,citecolor=myblue        % Farbe für Zitate
+  ,linkcolor=myblue        % beeinflusst Inhaltsverzeichnis und Seitenzahlen
+  ,urlcolor=myblue         % Farbe für URLs
+  ,bookmarks               % Erzeugung von Bookmarks für PDF-Viewer
+  ,bookmarksnumbered       % Nummerierung der Bookmarks
+  ,hyperfootnotes=false    % Keine Links auf Fußnoten
+  ,pdfpagelabels 
+  ,pdftex
+  ,pdftitle={Haskell Articles}
+  ,pdfsubject={A List of Haskell Articles on good design, good testing}
+  ,pdfauthor={Michael Oswald}
+  ,pdfcreator={LaTeX, hyperref, KOMA-Script}
+  ,pdfstartview=FitH,      % Dokument wird »Fit Width« geöffnet
+  ,pdfpagemode=UseOutlines % Bookmarks im Viewer anzeigen
+  ,pdfdisplaydoctitle=true
+  ,bookmarksopenlevel=2    % Gliederungstiefe der Bookmarks
+  ] 
+  {hyperref}               % PDF automatisch mit Links versehen und weitere
+                           % Hypertext-Funktionalität ermöglichen
+% Farbdefinitionen:
+\definecolor{myblue}{rgb}{0,.1,.6}
+\definecolor{myblue2}{rgb}{0,.4,.6}
+\definecolor{grau}{gray}{.4}
+\definecolor{ecru}{rgb}{1,.98823529411764705,.95686274509803921568}
+
+\usepackage[figure]{hypcap} % Links auf Gleitumgebungen springen nicht
+                            % zur Beschriftung, sondern zum Anfang der
+                            % Gleitumgebung 
+
+\usepackage{minted}
+                   
+                   
+                   
+% 3-spaltiger Index
+\makeatletter
+\renewenvironment{theindex}{%
+  \begin{multicols}{3}[\section*{\indexname}][19\baselineskip]%
+    \setlength{\parindent}{0pt}\pagestyle{plain}\let\item\@idxitem}
+  {\end{multicols}}
+\makeatother
+
+% Zweispaltige Fußnoten
+\usepackage{dblfnote}
+% Keine hochgestellten Ziffern in der Fußnote (KOMA-Script-spezifisch):
+\deffootnote[1.5em]{0pt}{1em}{\makebox[1.5em][l]{\bfseries\thefootnotemark}} 
+% Abstand zwischen Fußnoten vergrößern:
+\setlength{\footnotesep}{.85\baselineskip}
+
+\renewcommand{\footnoterule}{}             % Keine Trennlinie zur Fußnote 
+\addtolength{\skip\footins}{\baselineskip} % Abstand Text <-> Fußnote
+% Fußnoten immer ganz unten auf einer \raggedbottom-Seite
+\usepackage{fnpos}
+
+\raggedbottom     % Variable Seitenhöhen zulassen
+
+
+
+%% Bibliographiestil %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\usepackage{natbib}
+
+\newcommand{\todo}{\colorbox{yellow}{TODO} }
+
+
+\newcommand{\doublepic}[4]{%
+
+\begin{figure}[htbp]
+	\begin{minipage}[b]{0.5\linewidth}
+		\includegraphics[width=.95\linewidth]{pics/#1}
+		\caption{#2}
+		\label{fig:#1}
+	\end{minipage}
+	\begin{minipage}[b]{0.5\linewidth}
+		\centering
+		\vfill
+		\includegraphics[width=.95\linewidth]{pics/#3}
+		\vfill
+		\caption{#4}
+		\label{fig:#3}
+	\end{minipage}
+\end{figure}
+}
+
+\colorlet{tableheader}{Bittersweet}
+\colorlet{tableline}{YellowOrange}
+
+\font\teng=teng10
+
+\addtokomafont{caption}{\itshape}
+\addtokomafont{captionlabel}{\itshape}
+
+\begin{document}
+%% Dateiendungen für Grafiken %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ==> Sie können hiermit die Dateiendung einer Grafik weglassen.
+%% ==> Aus "\includegraphics{titel.eps}" wird "\includegraphics{titel}".
+%% ==> Wenn Sie nunmehr 2 inhaltsgleiche Grafiken "titel.eps" und
+%% ==> "titel.pdf" erstellen, wird jeweils nur die Grafik eingebunden,
+%% ==> die von ihrem Compiler verarbeitEine integrale Analyse der politischen 
+%% ==> pdfLaTeX benutzt "titel.pdf". LaTeX benutzt "titel.eps".
+\ifpdf
+	\DeclareGraphicsExtensions{.pdf,.jpg,.png}
+\else
+	\DeclareGraphicsExtensions{.eps}
+\fi
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\includegraphics[wid%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Ihr Buch                                                          %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Schmutztitel-Seite %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\extratitle{Schmutztitel}
+
+%% eigene Titelseitengestaltung %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+\begin{titlepage}
+%Einsetzen der TXC Vorlage "Deckblatt" möglich
+
+\rule{\textwidth}{0pt}
+
+
+\vspace{6\baselineskip}
+
+%\begin{center}
+%\includegraphics[width=0.4\textwidth]{pics/Amatsu_Ryoho_Flower_Final_Doc}
+%\begin{minipage}[b]{0.3\linewidth}
+%		\includegraphics[width=.95\linewidth]{pics/Amatsu_Integral.png}
+%	\end{minipage}
+%\end{center}
+
+\vspace{7\baselineskip}
+
+\begin{flushright}
+
+\Huge\textsc{\textit{A List of Haskell Articles on good design, good testing}}
+
+\rule{\textwidth}{4pt}
+
+% \Large \amrint
+
+\large William Yao
+
+\large Matt Parsons
+
+\large Alexis King
+
+\large Japer Van der Jeugt
+
+\large Tom Ellis
+
+\large Michael Snoyman
+
+\large Sandy Maguire
+
+\large Oskar Wickström
+
+\large Scott Wlaschin
+
+\large Hillel Wayne
+
+\end{flushright}
+
+\vfill
+
+
+\tiny \copyright{} by above mentioned authors, compilation by M. Oswald. You may freely copy and distribute this document.
+
+%\texttt{\input{git_hash.tex}}
+
+\end{titlepage}
+
+%% Angaben zur Standardformatierung des Titels %%%%%%%%%%%%%%%%%%%%%%%%
+%\titlehead{Titelkopf}
+%\subject{Typisierung}
+%\title{Der Name Ihrer Arbeit}
+%\author{Ihr Name}
+%\and{Der Name des Co-Autoren}
+%\thanks{Fußnote}			% entspr. \footnote im Fließtext
+%\date{}							% falls anderes, als das aktuelle gewünscht
+%\publishers{Herausgeber}
+
+%% Rückseite der Titelseite %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\uppertitleback{Titelrückseitenkopf}
+%\lowertitleback{Titelrückseitenfuß}
+
+%% Widmungsseite %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\dedication{Widmung}
+
+%\maketitle 						% Titelei wird erzeugt
+
+%% Erzeugung von Verzeichnissen %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{\sffamily
+\noindent This document is a compilation of web articles about Haskell, which was put together by William Yaoh. I was interested to have this in one document and not spread via different web pages, so I compiled them together in this document. 
+
+\vfill
+
+\begin{flushleft}
+The homepage for this document is: 
+\url{https://github.com/oswald2/haskell_articles}
+\end{flushleft}
+}
+
+\newpage
+
+
+\tableofcontents			% Inhaltsverzeichnis
+\listoffigures				% Abbildungsverzeichnis
+\listoftables				% Tabellenverzeichnis
+
+
+%% Der Text %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Introduction by William Yaoh}
+
+For a language that's beloved for its ability to guide the structure of programs into being easier to understand, easier to maintain, and easier to get correct, there's not a lot of resources on how to best use the tools that Haskell provides. Lots of terms and buzzwords, not a lot of in-depth practical guidance on best practices. So I've put together a list of community blog posts and articles on the theme of \emph{building more correct programs}.
+
+These are split roughly in two groups: posts about how best to leverage the type system to eliminate errors before they even occur, while striking a balance between type complexity and usability; and posts about using Haskell's best-in-class testing facilities to shore up what can't be typed\footnote{Or at least, not typed easily}. Despite the hype around Haskell's type system, it's unlikely in a program of any complexity that you'll be able to completely eliminate the possibility of bugs and errors purely through the type system alone. Using both types \emph{and} tests gives you a better power-to-weight ratio for building maintainable, bug-free programs than either does alone.
+
+Note that I'm explicitly not including articles and resources about basics or setup of the topics in question. Instead of ``what is a \texttt{Maybe} and why use it,'' think ``what are some typical patterns around using \texttt{Maybes} in a real codebase.'' Instead of ``what is property-based testing'', think ``here are best practices around choosing properties to test.'' Since there are already plenty of good introductory resources on things like ``how do I get started with QuickCheck'', we'll focus here instead on how best to use the tools we have.
+
+Posts in each section are roughly ordered by difficulty.
+
+
+\chapter{Posts on designing and structuring code}
+
+
+
+\input{matt_parsons.tex}
+
+
+\input{david_luposchainsky.tex}
+
+
+\input{alexis_king.tex}
+
+
+
+
+
+\appendix							% Beginn des Anhangs
+
+
+%% Bibliographie unter Verwendung von dinnat %%%%%%%%%%%%%%%%%%%%%%%%%%
+%\setbibpreamble{Präambel}		% Text vor dem Verzeichnis
+\bibliographystyle{plain}
+\bibliography{bibliographie}	% Sie benötigen einen *.bib-Datei
+
+
+
+\end{document}

@@ -1,0 +1,48 @@
+
+
+\section{Parse, don't validate - Alexis King}
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yaoh:}}
+
+\textit{Once all your functions have their inputs suitably restricted, how to actually go about ingesting real-world data (which will always have issues) and producing the types we need? Enforce it at the ``barriers'' in your code. That might be at the very start of an HTTP handler, it might be between two modules in your codebase. Do it right and your core logic
+contains only what it needs to solve the actual problem; no need for cluttering it up with extraneous error handling.}
+\end{quotation}
+
+\minisec{Alexis King}
+
+Historically, I've struggled to find a concise, simple way to explain what it means to practice type-driven design. Too often, when someone asks me ``How did you come up with this approach?'' I find I can't give them a satisfying answer. I know it didn't just come to me in a vision -- I have an iterative design process that doesn't require plucking the ``right'' approach out of thin air—yet I haven't been very successful in communicating that process to others.
+
+However, about a month ago, I was reflecting on Twitter about the differences I experienced parsing JSON in statically- and dynamically-typed languages, and finally, I realized what I was looking for. Now I have a single, snappy slogan that encapsulates what type-driven design means to me, and better yet, it's only three words long:
+
+\begin{quotation}
+\textbf{\textit{Parse, don't validate.}}
+\end{quotation}
+
+\subsection{The essence of type-driven design}
+
+Alright, I'll confess: unless you already know what type-driven design is, my catchy slogan probably doesn't mean all that much to you. Fortunately, that's what the remainder of this blog post is for. I'm going to explain precisely what I mean in gory detail—but first, we need to practice a little wishful thinking.
+
+\subsubsection{The realm of possibility}
+
+One of the wonderful things about static type systems is that they can make it possible, and sometimes even easy, to answer questions like ``is it possible to write this function?'' For an extreme example, consider the following Haskell type signature:
+
+\begin{minted}{haskell}
+foo :: Integer -> Void
+\end{minted}
+Is it possible to implement foo? Trivially, the answer is \textit{no}, as \texttt{Void} is a type that contains no values, so it's impossible for any function to produce a value of type \texttt{Void}\footnote{Technically, in Haskell, this ignores ``bottoms'', constructions that can inhabit \textit{any} value. These aren't ``real'' values (unlike \texttt{null} in some other languages) -- they're things like infinite loops or computations that raise exceptions -- and in idiomatic Haskell, we usually try to avoid them, so reasoning that pretends they don't exist still has value. But don't take my word for it -- I'll let Danielsson et al. convince you that \href{https://www.cs.ox.ac.uk/jeremy.gibbons/publications/fast+loose.pdf}{Fast and Loose Reasoning is Morally Correct.}} That example is pretty boring, but the question gets much more interesting if we choose a more realistic example:
+
+\begin{minted}{haskell}
+head :: [a] -> a
+\end{minted}
+This function returns the first element from a list. Is it possible to implement? It certainly doesn't sound like it does anything very complicated, but if we attempt to implement it, the compiler won't be satisfied:
+
+\begin{minted}{haskell}
+head :: [a] -> a
+head (x:_) = x
+
+warning: [-Wincomplete-patterns]
+    Pattern match(es) are non-exhaustive
+    In an equation for ‘head': Patterns not matched: []
+\end{minted}
+This message is helpfully pointing out that our function is partial, which is to say it is not defined for all possible inputs. Specifically, it is not defined when the input is \texttt{[]}, the empty list. This makes sense, as it isn't possible to return the first element of a list if the list is empty—there's no element to return! So, remarkably, we learn this function isn't possible to implement, either.

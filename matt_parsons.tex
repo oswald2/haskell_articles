@@ -1,0 +1,330 @@
+\section{Type Safety Back and Forth - Matt Parsons}
+\label{sec:type_safety_back_and_forth}
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yaoh:}}
+
+\textit{Essential reading. A very typical design technique of restricting what inputs your functions take to ensure that they can't fail.}
+
+\textit{The most typical instances of using this are \texttt{NonEmpty} for lists with at least one element and \texttt{Natural} for non-negative integers. Oddly, I don't often see people do the same thing for other structures where this would be useful; for instance, nonempty \texttt{Vector}s or nonempty \texttt{Text}. Thankfully, it's easy enough to define yourself.}
+\begin{minted}{haskell}
+data NonEmptyVec a = NonEmptyVec a (Vector a)
+
+-- An additional invariant you might want to enforce is
+-- 'not all whitespace'
+data NonEmptyText = NonEmptyText Char Text
+\end{minted}
+\end{quotation}
+
+
+\minisec{Matt Parsons:}
+Types are a powerful construct for improving program safety. Haskell has a few notable ways of handling potential failure, the most famous being the venerable \texttt{Maybe} type:
+
+\begin{minted}{haskell}
+data Maybe a
+    = Nothing
+    | Just a
+\end{minted}
+We can use Maybe as the result of a function to indicate:
+\begin{quotation}
+\noindent \textit{Hey, friend! This function might fail. You'll need to handle the \texttt{Nothing} case.                                                                             } 
+\end{quotation} 
+This allows us to write functions like a safe division function:
+
+\begin{minted}{haskell}
+safeDivide :: Int -> Int -> Maybe Int
+safeDivide i 0 = Nothing
+safeDivide i j = Just (i `div` j)
+\end{minted}
+
+I like to think of this as pushing the responsibility for failure forward. I'm telling the caller of the code that they can provide whatever \texttt{Int}s they want, but that some condition might cause them to fail. And the caller of the code has to handle that failure later on.
+
+This is the easiest technique to show and tell, because it's one-size-fits-all. If your function can fail, just slap \texttt{Maybe} or \texttt{Either} on the result type and you've got safety. I can write a 35 line blog post to show off the technique, and if I were feeling frisky, I could use it as an introduction to \texttt{Functor}, \texttt{Monad}, and all that jazz.
+
+Instead, I'd like to share another technique. Rather than push the responsibility for failure forward, let's explore pushing it back. This technique is a little harder to show, because it depends on the individual cases you might use.
+
+If pushing responsibility forward means accepting whatever parameters and having the caller of the code handle possibility of failure, then \textit{pushing it back} is going to mean we accept stricter parameters that we can't fail with. Let's consider \texttt{safeDivide}, but with a more lax type signature:
+
+
+\begin{minted}{haskell}
+safeDivide :: String -> String -> Maybe Int
+safeDivide iStr jStr = do
+    i <- readMay iStr
+    j <- readMay jStr
+    guard (j /= 0)
+    pure (i `div` j)
+\end{minted}
+This function takes two strings, and then tries to parse \texttt{Int}s out of them. Then, if the \texttt{j} parameter isn't \texttt{0}, we return the result of division. This function is safe, but we have a much larger space of calls to \texttt{safeDivide} that fail and return \texttt{Nothing}. We've accepted more parameters, but we've pushed a lot of responsibility forward for handling possible failure.
+
+Let's push the failure back.
+\begin{minted}{haskell}
+safeDivide :: Int -> NonZero Int -> Int
+safeDivide i (NonZero j) = i `div` j
+\end{minted}
+We've required that users provide us a \texttt{NonZero Int} rather than any old \texttt{Int}. We've pushed back against the callers of our function:
+\begin{quotation}
+\noindent \textit{No! You must provide a \texttt{NonZero Int}. I refuse to work with just any \texttt{Int}, because then I might fail, and that's annoying.} 
+\end{quotation} 
+So speaks our valiant little function, standing up for itself!
+
+Let's implement \texttt{NonZero}. We'll take advantage of Haskell's \texttt{PatternSynonyms} language extension to allow people to pattern match on a ``constructor'' without exposing a way to unsafely construct values.
+
+\begin{minted}{haskell}
+{-# LANGUAGE PatternSynonyms #-}
+
+module NonZero
+  ( NonZero()
+  , pattern NonZero
+  , unNonZero
+  , nonZero
+  ) where
+
+newtype NonZero a = UnsafeNonZero a
+
+pattern NonZero a <- UnsafeNonZero a
+
+unNonZero :: NonZero a -> a
+unNonZero (UnsafeNonZero a) = a
+
+nonZero :: (Num a, Eq a) => a -> Maybe (NonZero a)
+nonZero 0 = Nothing
+nonZero i = Just (UnsafeNonZero i)
+\end{minted}
+This module allows us to push the responsibility for type safety backwards onto callers.
+
+As another example, consider head. Here's the unsafe, convenient variety:
+\begin{minted}{haskell}
+head :: [a] -> a
+head (x:xs) = x
+head []     = error "oh no"
+\end{minted}
+This code is making a promise that it can't keep. Given the empty list, it will fail at runtime.
+
+Let's push the responsibility for safety forward:
+
+\begin{minted}{haskell}
+headMay :: [a] -> Maybe a
+headMay (x:xs) = Just x
+headMay []     = Nothing
+\end{minted}
+Now, we won't fail at runtime. We've required the caller to handle a \texttt{Nothing} case.
+
+Let's try pushing it back now:
+
+\begin{minted}{haskell}
+headOr :: a -> [a] -> a
+headOr def (x:xs) = x
+headOr def []     = def
+\end{minted}
+Now, we're requiring that the \textit{caller} of the function handle possible failure before they ever call this. There's no way to get it wrong. Alternatively, we can use a type for nonempty lists!
+
+\begin{minted}{haskell}
+data NonEmpty a = a :| [a]
+
+safeHead :: NonEmpty a -> a
+safeHead (x :| xs) = x
+\end{minted}
+This one works just as well. We're requiring that the calling code handle failure ahead of time.
+
+A more complicated example of this technique is the \href{https://hackage.haskell.org/package/justified-containers-0.1.2.0/docs/Data-Map-Justified-Tutorial.html}{justified-containers} library. The library uses the type system to prove that a given key exists in the underlying Map. From that point on, lookups using those keys are total: they are guaranteed to return a value, and they don't return a Maybe.
+
+This works even if you \texttt{map} over the \texttt{Map} with a function, transforming values. You can also use it to ensure that two maps share related information. It's a powerful feature, beyond just having type safety.
+
+
+
+
+
+
+\subsection{The Ripple Effect}
+
+When some piece of code hands us responsibility, we have two choices:
+
+\begin{enumerate}
+\item Handle that responsibility.
+\item Pass it to someone else!
+\end{enumerate}
+In my experience, developers will tend to push responsibility in the same direction that the code they call does. So if some function returns a \texttt{Maybe}, the developer is going to be inclined to also return a \texttt{Maybe} value. If some function requires a \texttt{NonEmpty Int}, then the developer is going to be inclined to also require a \texttt{NonEmpty Int} be passed in.
+
+This played out in my work codebase. We have a type representing an \texttt{Order} with many \texttt{Item}s in it. Originally, the type looked something like this:
+
+\begin{minted}{haskell}
+data Order = Order  { items :: [Item] }
+\end{minted}
+The \texttt{Item}s contained nearly all of the interesting information in the order, so almost everything that we did with an \texttt{Order} would need to return a \texttt{Maybe} value to handle the empty list case. This was a lot of work, and a lot of \texttt{Maybe} values!
+
+The type is \textit{too permissive}. As it happens, an \texttt{Order} may not exist without at least one \texttt{Item}. So we can make the type \textit{more restrictive} and have more fun!
+
+We redefined the type to be:
+
+\begin{minted}{haskell}
+data Order = Order { items :: NonEmpty Item }
+\end{minted}
+All of the \texttt{Maybe}s relating to the empty list were purged, and all of the code was pure and free. The failure case (an empty list of orders) was moved to two sites:
+
+\begin{enumerate}
+\item Decoding JSON
+\item Decoding database rows
+\end{enumerate}
+Decoding JSON happens at the API side of things, when various services \texttt{POST} updates to us. Now, we can respond with a \texttt{400} error and tell API clients that they've provided invalid data! This prevents our data from going bad.
+
+Decoding database rows is even easier. We use an \texttt{INNER JOIN} when retrieving \texttt{Order}s and \texttt{Item}s, which guarantees that each \texttt{Order} will have at least one \texttt{Item} in the result set. Foreign keys ensure that each \texttt{Item}'s \texttt{Order} is actually present in the database. This does leave the possibility that an \texttt{Order} might be orphaned in the database, but it's mostly safe.
+
+When we push our type safety back, we're encouraged to continue pushing it back. Eventually, we push it all the way back – to the edges of our system! This simplifies all of the code and logic inside of the system. We're taking advantage of types to make our code simpler, safer, and easier to understand.
+
+
+
+\subsection{Ask Only What You Need}
+
+In many senses, designing our code with type safety in mind is about being as strict as possible about your possible inputs. Haskell makes this easier than many other languages, but there's nothing stopping you from writing a function that can take literally any binary value, do whatever effects you want, and return whatever binary value:
+
+\begin{minted}{haskell}
+foobar :: ByteString -> IO ByteString
+\end{minted}
+A \texttt{ByteString} is a totally unrestricted data type. It can contain any sequence of bytes. Because it can express any value, we have very little guarantees on what it actually contains, and we are very limited in how we can safely handle this.
+
+By restricting our past, we gain freedom in the future.
+
+
+
+\section{Keep your types small\ldots and your bugs smaller - Matt Parsons}
+
+In my previous article ``Type Safety Back and Forth'' (\ref{sec:type_safety_back_and_forth}), I discussed two different techniques for bringing type safety to programs that may fail. On the one hand, you can push the responsibility forward. This technique uses types like \texttt{Either} and \texttt{Maybe} to report a problem with the inputs to the function. Here are two example type signatures:
+
+\begin{minted}{haskell}
+safeDivide
+    :: Int
+    -> Int
+    -> Maybe Int
+
+lookup
+    :: Ord k
+    => k
+    -> Map k a
+    -> Maybe a
+\end{minted}
+If the second parameter to \texttt{safeDivide} is \texttt{0}, then we return \texttt{Nothing}. Likewise, if the given \texttt{k} is not present in the \texttt{Map}, then we return \texttt{Nothing}.
+
+On the other hand, you can push it back. Here are those functions, but with the safety pushed back:
+
+\begin{minted}{haskell}
+safeDivide
+    :: Int
+    -> NonZero Int
+    -> Int
+
+lookupJustified
+    :: Key ph k
+    -> Map ph k a
+    -> a
+\end{minted}
+With \texttt{safeDivide}, we require the user pass in a \texttt{NonZero Int} -- a type that guarantees that the underlying value is not \texttt{0}. With \texttt{lookupJustified}, the \texttt{ph} type guarantees that the \texttt{Key} is present in the \texttt{Map}, so we can pull the resulting value out without requiring a \texttt{Maybe}. (Check out the \href{https://hackage.haskell.org/package/justified-containers-0.3.0.0/docs/Data-Map-Justified-Tutorial.html}{tutorial} for \texttt{justified-containers}, it is pretty awesome).
+
+
+
+
+\subsection{Expansion and Restriction}
+
+
+``Type Safety Back and Forth'' uses the metaphor of ``pushing'' the responsibility in one of two directions:
+
+\begin{itemize}
+\item forwards: the caller of the function is responsible for handling the possible error output
+\item backwards: the caller of the function is required to providing correct inputs
+\end{itemize}
+However, this metaphor is a bit squishy. We can make it more precise by talking about the ``cardinality'' of a type -- how many values it can contain. The type \texttt{Bool} can contain two values -- \texttt{True} and \texttt{False}, so we say it has a cardinality of 2. The type \texttt{Word8} can express the numbers from 0 to 255, so we say it has a cardinality of 256.
+
+The type \texttt{Maybe a} has a cardinality of $1 + a$. We get a ``free'' value \texttt{Nothing :: Maybe a}. For every value of type \texttt{a}, we can wrap it in \texttt{Just}. 
+The type \texttt{Either e a} has a cardinality of $e + a$. We can wrap all the values of type \texttt{e} in \texttt{Left}, and then we can wrap all the values of type \texttt{a} in \texttt{Right}.
+
+The first technique -- pushing forward -- is ``expanding the result type.'' When we wrap our results in \texttt{Maybe}, \texttt{Either}, and similar types, we're saying that we can't handle all possible inputs, and so we must have extra outputs to safely deal with this.
+
+Let's consider the second technique. Specifically, here's \texttt{NonZero} and \texttt{NonEmpty}, two common ways to implement it:
+
+\begin{minted}{haskell}
+newtype NonZero a
+    = UnsafeNonZero
+    { unNonZero :: a
+    }
+
+nonZero :: (Num a, Eq a) => a -> Maybe (NonZero a)
+nonZero 0 = Nothing
+nonZero i = Just (UnsafeNonZero i)
+
+data NonEmpty a = a :| [a]
+
+nonEmpty :: [a] -> Maybe (NonEmpty a)
+nonEmpty []     = Nothing
+nonEmpty (x:xs) = x :| xs
+\end{minted}
+What is the cardinality of these types?
+
+\texttt{NonZero} a represents ``the type of values \texttt{a} such that the value is not equal to \texttt{0}.'' \texttt{NonEmpty a} represents ``the type of lists of a that are not empty''. In both of these cases, we start with some larger type and remove some potential values. So the type \texttt{NonZero a} has the cardinality $a - 1$, and the type \texttt{NonEmpty a} has the cardinality $[a] - 1$.
+
+Interestingly enough, \texttt{[a]} has an infinite cardinality, so $[a] - 1$ seems somewhat strange -- it is also infinite! Math tells us that these are even the same infinity. So it's not the mere cardinality that helps -- it is the specific value(s) that we have removed that makes this type safer for certain operations.
+
+These are custom examples of \href{https://ucsd-progsys.github.io/liquidhaskell-tutorial/}{refinement types}. Another closely related idea is \href{https://www.hedonisticlearning.com/posts/quotient-types-for-programmers.html}{quotient types}. The basic idea here is to restrict the size of our inputs. Slightly more formally,
+
+\begin{itemize}
+\item Forwards: expand the range
+\item Backwards: restrict the domain
+\end{itemize}
+
+
+
+
+\subsection{Constraints Liberate}
+
+
+
+Runar Bjarnason has a wonderful talk titled \href{https://www.youtube.com/watch?v=GqmsQeSzMdw}{Constraints Liberate, Liberties Constrain}. The big idea of the talk, as I see it, is this:
+\begin{quotation}
+\textit{When we restrict what we can do, it's easier to understand what we can do.}
+\end{quotation}
+I feel there is a deep connection between this idea and Rich Hickey's talk \href{https://www.youtube.com/watch?v=34_L7t7fD_U}{Simple Made Easy}. In both cases, we are focusing on simplicity -- on cutting away the inessential and striving for more elegant ways to express our problems.
+
+Pushing the safety forward -- expanding the range -- does not make things simpler. It provides us with more power, more options, and more possibilities. Pushing the safety backwards -- restricting the domain -- does make things simpler. We can use this technique to take away the power to get it wrong, the options that aren't right, and the possibilities we don't want.
+
+Indeed, if we manage to restrict our types sufficiently, there may be only one implementation possible! The classic example is the \texttt{identity} function:
+
+\begin{minted}{haskell}
+identity :: a -> a
+identity a = a
+\end{minted}
+This is the only implementation of this function that satisfies the type signature (ignoring undefined, of course). In fact, for any function with a sufficiently precise type signature, there is a way to automatically derive the function! Joachim Breitner's \href{https://www.joachim-breitner.de/blog/735-The_magic_%E2%80%9CJust_do_it%E2%80%9D_type_class}{justDoIt} is a fascinating utility that can solve these implementations for you.
+
+With sufficiently fancy types, the computer can write even more code for you. The programming language Idris can \href{https://youtu.be/X36ye-1x_HQ?t=1140}{write well-defined functions like \texttt{zipWith} and \texttt{transpose} for length-indexed lists nearly automatically}!
+
+
+\subsection{Restrict the Range}
+
+I see this pattern and I am compelled to fill it in:
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+ & \textbf{Restrict}  & \textbf{Expand} \\
+\hline
+Range &  & \texttt{:(} \\
+Domain & \texttt{:D} & \\
+\end{tabular} 
+\end{table}
+I've talked about restricting the domain and expanding the range. Expanding the domain seems silly to do -- we accept more possible values than we know what to do with. This is clearly not going to make it easier or simpler to implement our programs. However, there are many functions in Haskell's standard library that have a domain that is too large. Consider:
+
+\begin{minted}{haskell}
+take :: Int -> [a] -> [a]
+\end{minted}
+\texttt{Int}, as a domain, is both too large and too small. It allows us to provide negative numbers: what does it even mean to take \texttt{-3} elements from a list? As \texttt{Int} is a finite type, and \texttt{[a]} is infinite, we are restricted to only using this function with sufficiently small \texttt{Int}s. A closer fit would be \texttt{take :: Natural -> [a] -> [a]}. Natural allows any non-negative whole number, and perfectly expresses the reasonable domain. Expanding the domain isn't desirable, as we might expect.
+
+\texttt{base} has functions with a \texttt{range} that is too large, as well. Let's consider:
+\begin{minted}{haskell}
+length :: [a] -> Int
+\end{minted}
+This has many of the same problems as \texttt{take} -- a list with too many elements will overflow the \texttt{Int}, and we won't get the right answer. Additionally, we have a guarantee that we \textit{forget} -- a length for any container must be positive! We can more correctly express this type by restricting the output type:
+
+\begin{minted}{haskell}
+length :: [a] -> Natural
+\end{minted}
+
+\subsection{A perfect fit}
+
+
+The more precisely our types describe our program, the fewer ways we have to go wrong. Ideally, we can provide a correct output for every input, and we use a type that tightly describes the properties of possible outputs.

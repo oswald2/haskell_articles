@@ -1,6 +1,6 @@
 
 
-\section{Parse, don't validate - Alexis King}
+\chapter{Parse, don't validate - Alexis King}
 
 \begin{quotation}
 \noindent\textit{\textbf{William Yaoh:}}
@@ -19,11 +19,11 @@ However, about a month ago, I was reflecting on Twitter about the differences I 
 \textbf{\textit{Parse, don't validate.}}
 \end{quotation}
 
-\subsection{The essence of type-driven design}
+\section{The essence of type-driven design}
 
 Alright, I'll confess: unless you already know what type-driven design is, my catchy slogan probably doesn't mean all that much to you. Fortunately, that's what the remainder of this blog post is for. I'm going to explain precisely what I mean in gory detail—but first, we need to practice a little wishful thinking.
 
-\subsubsection{The realm of possibility}
+\subsection{The realm of possibility}
 
 One of the wonderful things about static type systems is that they can make it possible, and sometimes even easy, to answer questions like ``is it possible to write this function?'' For an extreme example, consider the following Haskell type signature:
 
@@ -43,6 +43,60 @@ head (x:_) = x
 
 warning: [-Wincomplete-patterns]
     Pattern match(es) are non-exhaustive
-    In an equation for ‘head': Patterns not matched: []
+    In an equation for 'head': Patterns not matched: []
 \end{minted}
 This message is helpfully pointing out that our function is partial, which is to say it is not defined for all possible inputs. Specifically, it is not defined when the input is \texttt{[]}, the empty list. This makes sense, as it isn't possible to return the first element of a list if the list is empty—there's no element to return! So, remarkably, we learn this function isn't possible to implement, either.
+
+
+
+\section{Turning partial functions total}
+
+To someone coming from a dynamically-typed background, this might seem perplexing. If we have a list, we might very well want to get the first element in it. And indeed, the operation of ``getting the first element of a list'' isn't impossible in Haskell, it just requires a little extra ceremony. There are two different ways to fix the head function, and we'll start with the simplest one.
+
+\subsection{Managing expectations}
+
+As established, head is partial because there is no element to return if the list is empty: we've made a promise we cannot possibly fulfill. Fortunately, there's an easy solution to that dilemma: we can weaken our promise. Since we cannot guarantee the caller an element of the list, we'll have to practice a little expectation management: we'll do our best return an element if we can, but we reserve the right to return nothing at all. In Haskell, we express this possibility using the Maybe type:
+
+\begin{minted}{haskell}
+head :: [a] -> Maybe a
+\end{minted}
+This buys us the freedom we need to implement head—it allows us to return Nothing when we discover we can't produce a value of type a after all:
+
+\begin{minted}{haskell}
+head :: [a] -> Maybe a
+head (x:_) = Just x
+head []    = Nothing
+\end{minted}
+Problem solved, right? For the moment, yes\ldots but this solution has a hidden cost.
+
+Returning \texttt{Maybe} is undoubtably convenient when we're implementing head. However, it becomes significantly less convenient when we want to actually use it! Since head always has the potential to return Nothing, the burden falls upon its callers to handle that possibility, and sometimes that passing of the buck can be incredibly frustrating. To see why, consider the following code:
+
+\begin{minted}{haskell}
+getConfigurationDirectories :: IO [FilePath]
+getConfigurationDirectories = do
+  configDirsString <- getEnv "CONFIG_DIRS"
+  let configDirsList = split ',' configDirsString
+  when (null configDirsList) $
+    throwIO $ userError "CONFIG_DIRS cannot be empty"
+  pure configDirsList
+
+main :: IO ()
+main = do
+  configDirs <- getConfigurationDirectories
+  case head configDirs of
+    Just cacheDir -> initializeCache cacheDir
+    Nothing -> error "should never happen; already checked configDirs is non-empty"
+\end{minted}
+When \texttt{getConfigurationDirectories} retrieves a list of file paths from the environment, it proactively checks that the list is non-empty. However, when we use head in main to get the first element of the list, the \texttt{Maybe FilePath} result still requires us to handle a \texttt{Nothing} case that we know will never happen! This is terribly bad for several reasons:
+
+\begin{enumerate}
+\item First, it's just annoying. We already checked that the list is non-empty, why do we have to clutter our code with another redundant check?
+
+\item Second, it has a potential performance cost. Although the cost of the redundant check is trivial in this particular example, one could imagine a more complex scenario where the redundant checks could add up, such as if they were happening in a tight loop.
+
+\item Finally, and worst of all, this code is a bug waiting to happen! What if \texttt{get\-Configuration\-Directories} were modified to stop checking that the list is empty, intentionally or unintentionally? The programmer might not remember to update main, and suddenly the ``impossible'' error becomes not only possible, but probable.                                                                                                                                                                                                                                                                                                                            \end{enumerate}
+
+
+The need for this redundant check has essentially forced us to punch a hole in our type system. If we could statically prove the \texttt{Nothing} case impossible, then a modification to \texttt{getConfigurationDirectories} that stopped checking if the list was empty would invalidate the proof and trigger a compile-time failure. However, as-written, we're forced to rely on a test suite or manual inspection to catch the bug.
+
+

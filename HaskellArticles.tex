@@ -32,7 +32,7 @@ bibtotoc,						% Literaturverzeichnis im Inhalt
 %fleqn,								% Ausgabe von Gleichungen linksbündig
 %draft								% überlangen Zeilen in Ausgabe gekennzeichnet
 ]
-{scrreprt}
+{scrbook}
 
 %\pagestyle{empty}		% keine Kopf und Fußzeile (k. Seitenzahl)
 %\pagestyle{headings}	% lebender Kolumnentitel  
@@ -85,11 +85,11 @@ bibtotoc,						% Literaturverzeichnis im Inhalt
 \usepackage{amsmath}
 
 %% deutsche Anpassung %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\usepackage[english,ngerman]{babel}		
+\usepackage[english]{babel}		
 \usepackage{multirow,bigdelim} 
 \usepackage[paper=a4paper,left=25mm,right=25mm,top=20mm,bottom=28mm]{geometry} 
 \usepackage{niceframe}
-\usepackage[ngerman]{varioref}      % »Intelligente« Querverweise
+\usepackage[english]{varioref}      % »Intelligente« Querverweise
 \usepackage{tabulary}
 
 \usepackage{wrapfig}
@@ -401,9 +401,7 @@ Note that I'm explicitly not including articles and resources about basics or se
 Posts in each section are roughly ordered by difficulty.
 
 
-\chapter{Posts on designing and structuring code}
-
-
+\part{Posts on designing and structuring code}
 
 \input{matt_parsons.tex}
 
@@ -415,6 +413,8 @@ Posts in each section are roughly ordered by difficulty.
 
 
 
+
+\part{Posts on testing}
 
 
 \appendix							% Beginn des Anhangs

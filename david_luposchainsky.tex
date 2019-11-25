@@ -1,4 +1,4 @@
-\section{Algebraic blindness - David Luposchainsky}
+\chapter{Algebraic blindness - David Luposchainsky}
 
 \begin{quotation}
 \noindent\textit{\textbf{William Yaoh:}}
@@ -8,11 +8,11 @@
 \textit{Goes through how we might solve this problem by defining new datatypes that are isomorphic to, say, \texttt{Bool}, but with more useful names. Note that the problem that the article talks about with regards to not having typeclass instances for your custom types can (since GHC 8.6) be solved using \texttt{DerivingVia}.}
 \end{quotation}
 
-\subsection{Abstract}
+\section{Abstract}
 
 Algebraic data types make data more flexible, but also prone to a form of generalized Boolean Blindness, making code more difficult to maintain. Luckily, refactoring the issues is completely type-safe.
 
-\subsection{Boolean blindness}
+\section{Boolean blindness}
 
 
 In programming, there is a common problem known as \textit{Boolean Blindness}, what it ``means'' to be \texttt{True} depends heavily on the context, and cannot be inferred by the value alone. Consider
@@ -28,7 +28,7 @@ The point is: in order to find out what the \texttt{True} means, you probably ha
 
 
 
-\subsection{Haskell to the rescue}
+\section{Haskell to the rescue}
 
 Haskell makes it very natural and cheap to define our own data types. The example code above would be expressed as
 
@@ -40,7 +40,7 @@ in more idiomatic Haskell. Here, the meaning of the field is obvious, and since 
 
 
 
-\subsection{The petting zoo of blindness}
+\section{The petting zoo of blindness}
 
 
 Boolean blindness is of course just a name for the most characteristic version of the issue that most standard types share. An \texttt{Int} parameter to a server might be a port or a timeout, a \texttt{String} could be a host, a route, a log prefix, and so on.
@@ -49,7 +49,7 @@ The Haskell solution is to simply wrap things in newtypes, tagging values with p
 
 
 
-\subsection{Algebraic blindness}
+\section{Algebraic blindness}
 
 
 Haskell has a lot more ``simple, always available, nicely supported'' types than most other languages, for example \texttt{Maybe}, \texttt{Either}, tuples or lists. These types naturally extend Boolean Blindness.
@@ -88,7 +88,7 @@ which is just as easy to implement, has four lines of overhead (instead of 0 lin
 
 
 
-\subsection{Haskell to the rescue, for real this time}
+\section{Haskell to the rescue, for real this time}
 
 We're lucky, because Haskell has a built-in solution here as well. We can prototype our programs not worrying about the precise meaning of symbols, use \texttt{Either () ()} instead of Bool because we might need the flexibility, and do all sorts of atrocities.
 
@@ -96,13 +96,13 @@ The type system allows us to repair our code: just understand what the different
 
 
 
-\subsection{Drawbacks}
+\section{Drawbacks}
 
 Introducing new domain types has a drawback: we lose the API of the standard types. The result is that we sometimes have to write boilerplate to get specific parts of the API back, which is unfortunate, and sometimes this makes it not worth bothering with the anti-blindness refactoring.
 
 
 
-\subsection{Conclusion}
+\section{Conclusion}
 
 
 When you have lots of faceless data types in your code, consider painting them with their domain meanings. Make them distinct, make them memorable, make them maintainable. And sometimes, when you see a type that looks like

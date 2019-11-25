@@ -1,4 +1,4 @@
-\section{Type Safety Back and Forth - Matt Parsons}
+\chapter{Type Safety Back and Forth - Matt Parsons}
 \label{sec:type_safety_back_and_forth}
 
 \begin{quotation}
@@ -135,7 +135,7 @@ This works even if you \texttt{map} over the \texttt{Map} with a function, trans
 
 
 
-\subsection{The Ripple Effect}
+\section{The Ripple Effect}
 
 When some piece of code hands us responsibility, we have two choices:
 
@@ -173,7 +173,7 @@ When we push our type safety back, we're encouraged to continue pushing it back.
 
 
 
-\subsection{Ask Only What You Need}
+\section{Ask Only What You Need}
 
 In many senses, designing our code with type safety in mind is about being as strict as possible about your possible inputs. Haskell makes this easier than many other languages, but there's nothing stopping you from writing a function that can take literally any binary value, do whatever effects you want, and return whatever binary value:
 
@@ -186,7 +186,7 @@ By restricting our past, we gain freedom in the future.
 
 
 
-\section{Keep your types small\ldots and your bugs smaller - Matt Parsons}
+\chapter{Keep your types small\ldots and your bugs smaller - Matt Parsons}
 
 In my previous article ``Type Safety Back and Forth'' (\ref{sec:type_safety_back_and_forth}), I discussed two different techniques for bringing type safety to programs that may fail. On the one hand, you can push the responsibility forward. This technique uses types like \texttt{Either} and \texttt{Maybe} to report a problem with the inputs to the function. Here are two example type signatures:
 
@@ -222,7 +222,7 @@ With \texttt{safeDivide}, we require the user pass in a \texttt{NonZero Int} -- 
 
 
 
-\subsection{Expansion and Restriction}
+\section{Expansion and Restriction}
 
 
 ``Type Safety Back and Forth'' uses the metaphor of ``pushing'' the responsibility in one of two directions:
@@ -272,7 +272,7 @@ These are custom examples of \href{https://ucsd-progsys.github.io/liquidhaskell-
 
 
 
-\subsection{Constraints Liberate}
+\section{Constraints Liberate}
 
 
 
@@ -295,7 +295,7 @@ This is the only implementation of this function that satisfies the type signatu
 With sufficiently fancy types, the computer can write even more code for you. The programming language Idris can \href{https://youtu.be/X36ye-1x_HQ?t=1140}{write well-defined functions like \texttt{zipWith} and \texttt{transpose} for length-indexed lists nearly automatically}!
 
 
-\subsection{Restrict the Range}
+\section{Restrict the Range}
 
 I see this pattern and I am compelled to fill it in:
 \begin{table}[htbp]
@@ -324,7 +324,7 @@ This has many of the same problems as \texttt{take} -- a list with too many elem
 length :: [a] -> Natural
 \end{minted}
 
-\subsection{A perfect fit}
+\section{A perfect fit}
 
 
 The more precisely our types describe our program, the fewer ways we have to go wrong. Ideally, we can provide a correct output for every input, and we use a type that tightly describes the properties of possible outputs.

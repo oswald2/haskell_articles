@@ -1,0 +1,111 @@
+\chapter{Weakly Typed Haskell - Michael Snoyman}
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yaoh:}}
+
+\textit{A short example of preventing errors by restricting our function inputs. Uses the streaming library conduit for its example, but should be understandable without knowing too much about it.}
+\end{quotation}
+
+
+I was recently doing a minor cleanup of a Haskell codebase. I started off with some code that looked like this:
+
+\begin{minted}{haskell}
+runConduitRes $ sourceFile fp .| someConsumer
+\end{minted}
+This code uses \href{https://haskell-lang.org/library/conduit}{Conduit} to stream the contents of a file into a consumer function, and \href{https://www.fpcomplete.com/blog/2017/06/understanding-resourcet}{ResourceT} to ensure that the code is exception safe (the file is closed regardless of exceptions). For various reasons (not relevant to our discussion now), I was trying to reduce usage of \texttt{ResourceT} in this bit of code, and so I instead wrote:
+
+\begin{minted}{haskell}
+withBinaryFile fp ReadMode $ \h ->
+  runConduit $ sourceHandle h .| someConsumer
+\end{minted}
+Instead of using \texttt{ResourceT} to ensure exception safety, I used the \texttt{with} (or \texttt{bracket}) pattern embodied by the \texttt{withBinaryFile} function. This transformation worked very nicely, and I was able to apply the change to a number of parts of the code base.
+
+However, I noticed an error message from this application a few days later:
+
+\begin{minted}{haskell}
+/some/long/file/path.txt: hGetBufSome: illegal operation (handle is not 
+open for reading)
+\end{minted}
+I looked through my code base, and sure enough I found that in one of the places I'd done this refactoring, I'd written the following instead:
+
+\begin{minted}{haskell}
+withBinaryFile fp WriteMode $ \h ->
+  runConduit $ sourceHandle h.| someConsumer
+\end{minted}
+Notice how I used \texttt{WriteMode} instead of \texttt{ReadMode}. It's a simple mistake, and it's obvious when you look at it. The patch to fix this bug was trivial. But I wasn't satisfied with fixing this bug. I wanted to eliminate it from happening again.
+
+\section{A strongly typed language?}
+
+Lots of people believe that Haskell is a strongly typed language. Strong typing means that you catch lots of classes of bugs with the type system itself. (Static typing means that the type checking occurs at compile time instead of runtime.) I disagree: Haskell is \texttt{not} a strongly typed language. In fact, my claim is broader:
+
+\begin{quotation}
+\textit{There's no such thing as a strongly typed language}
+\end{quotation}
+Instead, you can write your code in strongly typed or weakly typed style. Some language features make it easy to make your programs more strongly typed. For example, Haskell supports:
+
+\begin{itemize}
+\item Cheap newtype wrappers
+\item Sum types
+\item Phantom type arguments
+\item GADTs
+\end{itemize}
+All of these features allow you to more easily add type safety to your code. But here's the rub:
+
+\begin{quotation}
+ \textit{You have to add the type safety yourself }
+\end{quotation}
+If you want to write a program in Haskell that passes string data everywhere and puts everything in \texttt{IO}, you're still writing Haskell, but you're throwing away the potential for getting extra protections from the compiler.
+
+My \texttt{withBinaryFile} usage is a small-scale example of this. The \texttt{sourceFile} function I'd been using previously looks roughly like:
+
+\begin{minted}{haskell}
+sourceFile :: FilePath -> Source (ResourceT IO) ByteString
+\end{minted}
+This says that if you give this function a \texttt{FilePath}, it will give you back a stream of bytes, and that it requires \texttt{ResourceT} to be present (to register the cleanup function in the case of an exception). Importantly: there's no way you could accidentally try to send data into this file. The type (\texttt{Source}) prevents it. If you did something like:
+
+\begin{minted}{haskell}
+runConduitRes $ someProducer .| sourceFile "output.txt"
+\end{minted}
+The compiler would complain about the types mismatching, which is exactly what you want! Now, by contrast, let's look at the types of \texttt{withBinaryFile} and \texttt{sourceHandle}:
+
+\begin{minted}{haskell}
+withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
+sourceHandle :: Handle -> Source IO ByteString
+\end{minted}
+The type signature of \texttt{withBinaryFile} uses the bracket pattern, meaning that you provide it with a function to run while the file is open, and it will ensure that it closes the file. But notice something about the type of that inner function: \texttt{Handle -> IO a}. It tells you absolutely nothing about whether the file is opened for reading and writing!
+
+The question is: how do we protect ourselves from the kinds of bugs this weak typing allows?
+
+\section{Quarantining weak typing}
+
+Let's capture the basic concept of what I was trying to do in my program with a helper function:
+
+\begin{minted}{haskell}
+withSourceFile :: FilePath -> (Source IO ByteString -> IO a) -> IO a
+withSourceFile fp inner =
+  withBinaryFile fp ReadMode $ \handle ->
+    inner $ sourceHandle handle
+\end{minted}
+This function has all of the same weak typing problems in its body as what I wrote before. However, let's look at the use site of this function:
+
+\begin{minted}{haskell}
+withSourceFile fp $ \src -> runConduit $ src .| someConsumer
+\end{minted}
+I definitely can't accidentally pass \texttt{WriteMode} instead, and if I try to do something like:
+
+\begin{minted}{haskell}
+withSourceFile fp $ \src -> runConduit $ someProducer .| src
+\end{minted}
+I'll get a compile time error. In other words:
+\begin{quotation}
+ \textit{While my function internally is weakly typed, externally it's strongly typed }
+\end{quotation}
+This means that all users of my functions get the typing guarantees I've been hoping to provide. We can't eliminate the possibility of weak typing errors completely, since the systems we're running on are ultimately weakly typed. After all, at the OS level, a file descriptor is just an int, and tells you nothing about whether it's read mode, write mode, or even a pointer to some random address in memory.
+
+Instead, our goal in writing strongly typed programs is to contain as much of the weak typing to helper functions as possible, and expose a strongly typed interface for most of our program. By using \texttt{withSourceFile} instead of \texttt{withBinaryFile}, I now have just one place in my code I need to check the logic of using \texttt{ReadMode} correctly, instead of dozens.
+
+\section{Discipline and best practices}
+
+The takeaway here is that you can \textit{always} shoot yourself in the foot. Languages like Haskell are not some piece of magic that will eliminate bugs. You need to follow through with discipline in using the languages well if you want to get the benefits of features like strong typing.
+
+You can use the some kind of technique in many languages. But if you use a language like Haskell with a plethora of features geared towards easy safety, you'll be much more likely to follow through on it.

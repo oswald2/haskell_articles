@@ -3,11 +3,15 @@
 
 
 \begin{quotation}
-\noindent\textit{\textbf{William Yaoh:}}
+\noindent\textit{\textbf{William Yao:}}
 
 \textit{A worked example of going from a functional, if difficult-to-maintain piece of code, to a design where all the invariants are type-checked and there's no potential crashes to be found.}
 
 \textit{One thing that you should take away from this article is just how much of the refactoring is completely mechanical and required no understanding of the code at all. This is the biggest thing that people are talking about when they say that Haskell is ``easy to maintain'': it's possible to make sweeping changes to your code and improve the design with almost 100\% certainty that it will still work without needing to think about what the code is doing at all.}
+
+\vspace{\baselineskip}
+
+\noindent\textit{Original article:  \cite{good_design_and_type_safety_in_yahtzee}}
 \end{quotation}
 Mark Dominus wrote an \href{https://blog.plover.com/prog/haskell/type-markers.html}{article asking how to take advantage of Haskell's type safety in a simple dice-rolling simulation function for the game Yahtzee}. He added wrapper types so that one cannot mistakenly apply the function to values that merely have the correct type ``by accident''. He says the result is ``unreadable'' and ``unmaintainable''. It certainly doesn't look nice! I'd claim it's not even of much practical safety benefit (although I suppose that depends on what the rest of the program looks like).
 
@@ -532,7 +536,11 @@ None of this \textit{requires} a language like Haskell. It would be good design 
 
 \chapter{Using our brain less in refactoring Yahtzee - Tom Ellis}
 
-Cameron Gera and Taylor Fausak \href{https://haskellweekly.news/episode/22.html}{produced a podcast} on an article of mine about good design and typesafety (see section \ref{sec:good_design_and_typesafety}) using code from an implementation of the game Yahtzee. The article is about refactoring code to improve design and how that goes hand-in-hand with type safety. Intriguingly, listening to others talk about my article gave me fresh ideas.
+\textit{Original article: \cite{using_our_brain_less}}
+
+\vspace{\baselineskip}
+
+\noindent Cameron Gera and Taylor Fausak \href{https://haskellweekly.news/episode/22.html}{produced a podcast} on an article of mine about good design and typesafety (see section \ref{sec:good_design_and_typesafety}) using code from an implementation of the game Yahtzee. The article is about refactoring code to improve design and how that goes hand-in-hand with type safety. Intriguingly, listening to others talk about my article gave me fresh ideas.
 
 At one point in the article we observed that a variable to an argument was unused. Subsequently we removed it. The only justification given that the removal of the argument was valid was that we could convince ourselves that it was unused by looking at the implementation of the function, and that we could insert a run time check.
 

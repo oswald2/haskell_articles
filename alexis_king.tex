@@ -3,10 +3,14 @@
 \chapter{Parse, don't validate - Alexis King}
 
 \begin{quotation}
-\noindent\textit{\textbf{William Yaoh:}}
+\noindent\textit{\textbf{William Yao:}}
 
 \textit{Once all your functions have their inputs suitably restricted, how to actually go about ingesting real-world data (which will always have issues) and producing the types we need? Enforce it at the ``barriers'' in your code. That might be at the very start of an HTTP handler, it might be between two modules in your codebase. Do it right and your core logic
 contains only what it needs to solve the actual problem; no need for cluttering it up with extraneous error handling.}
+
+\vspace{\baselineskip}
+
+\noindent\textit{Original article: \cite{parse_dont_validate}}
 \end{quotation}
 
 Historically, I've struggled to find a concise, simple way to explain what it means to practice type-driven design. Too often, when someone asks me ``How did you come up with this approach?'' I find I can't give them a satisfying answer. I know it didn't just come to me in a vision -- I have an iterative design process that doesn't require plucking the ``right'' approach out of thin air—yet I haven't been very successful in communicating that process to others.

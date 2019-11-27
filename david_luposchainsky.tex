@@ -1,11 +1,15 @@
 \chapter{Algebraic blindness - David Luposchainsky}
 
 \begin{quotation}
-\noindent\textit{\textbf{William Yaoh:}}
+\noindent\textit{\textbf{William Yao:}}
 
 \textit{The motivating problem: if I have a \texttt{Maybe Int}, I only implicitly know what the two branches \textbf{mean}. \texttt{Nothing} could mean ``something bad happened, abort'', or it could mean ``I haven't found anything yet, keep going.'' Conversely, a value of \texttt{Just x} could be a useful value, or it could be a subroutine signalling that an error code occurred. The names are \textbf{too generic}; the structure only tells us what we have, not what it's for.}
 
 \textit{Goes through how we might solve this problem by defining new datatypes that are isomorphic to, say, \texttt{Bool}, but with more useful names. Note that the problem that the article talks about with regards to not having typeclass instances for your custom types can (since GHC 8.6) be solved using \texttt{DerivingVia}.}
+
+\vspace{\baselineskip}
+
+\noindent\textit{Original article: \cite{algebraic_blindness}}
 \end{quotation}
 
 \section{Abstract}

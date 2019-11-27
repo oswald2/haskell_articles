@@ -1,11 +1,14 @@
 \chapter{The Trouble with Typed Errors - Matt Parsons}
 
 \begin{quotation}
-\noindent\textit{\textbf{William Yaoh:}}
+\noindent\textit{\textbf{William Yao:}}
 
 \textit{Or: ``Avoiding a monolithic error type''}
 
 \textit{Good, but not necessary when starting out. While the approach described here is pretty cool, it's also somewhat heavyweight. You'll have to decide for yourself whether it's worth the extra cognitive overhead. Truthfully it can often be quite reasonable to have a single, monolithic sum type for all your application/library errors.}
+
+\vspace{\baselineskip}
+\noindent\textit{Original article: \cite{the_trouble_with_typed_errors}}
 \end{quotation}
 
 You, like me, program in either Haskell, or Scala, or F\#, or Elm, or PureScript, and you don't like runtime errors. They're awful and nasty! You have to debug them, and they're not represented in the types. Instead, we like to use \texttt{Either} (or something isomorphic) to represent stuff that might fail:

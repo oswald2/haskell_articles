@@ -1,0 +1,579 @@
+\chapter{Type-Directed Code Generation - Sandy Maguire}
+
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yao:}}
+
+\textit{This post is entirely reasonable to skip, as it requires being familiar with some of GHC's esoteric type extensions. Still, it's a cool introduction to using the more powerful features of the language to make interacting with a complex protocol (gRPC) less error-prone.}
+
+\vspace{\baselineskip}
+\noindent\textit{Original article: \cite{type_directed_code_generation}}
+\end{quotation}
+
+
+\section{Context}
+
+
+At work recently I've been working on a library to get idiomatic gRPC support in our Haskell project. I'm quite proud of how it's come out, and thought it'd make a good topic for a blog post. The approach demonstrates several type-level techniques that in my opinion are under-documented and exceptionally useful in using the type-system to enforce external contracts.
+
+Thankfully the networking side of the library had already been done for me by \href{https://github.com/awakesecurity/gRPC-haskell}{Awake Security}, but the interface feels like a thin-wrapper on top of C bindings. I'm \textit{very, very} grateful that it exists, but I wouldn't expect myself to be able to use it in anger without causing an uncaught type error somewhere along the line. I'm sure I'm probably just using it wrong, but the library's higher-level bindings all seemed to be targeted at Awake's implementation of protobuffers.
+
+We wanted a version that would play nicely with \href{https://github.com/google/proto-lens}{proto-lens}, which, at time of writing, has no official support for describing RPC services via protobuffers. If you're not familiar with proto-lens, it generates Haskell modules containing idiomatic types and lenses for protobuffers, and can be used directly in the build chain.
+
+So the task was to add support to proto-lens for generating interfaces to RPC services defined in protobuffers.
+
+My first approach was to generate the dumbest possible thing that could work -- the idea was to generate records containing fields of the shape \texttt{Request -> IO Response}. Of course, with a network involved there is a non-negligible chance of things going wrong, so this interface should expose some means of dealing with errors. However, the protobuffer spec is agnostic about the actual RPC backend used, and so it wasn't clear how to continue without assuming anything about the particulars behind errors.
+
+More worrisome, however, was that RPCs can be marked as streaming -- on the side of the client, server, or both. This means, for example, that a method marked as server-streaming has a different interface on either side of the network:
+
+\begin{minted}{haskell}
+serverSide :: Request -> (Response -> IO ()) -> IO ()
+clientSide :: Request -> (IO (Maybe Response) -> IO r) -> IO r
+\end{minted}
+This is problematic. Should we generate different records corresponding to which side of the network we're dealing with? An early approach I had was to parameterize the same record based on which side of the network, and use a type family to get the correct signature:
+
+\begin{minted}{haskell}
+{-# LANGUAGE DataKinds #-}
+
+data NetworkSide = Client | Server
+
+data MyService side = MyService
+  { runServerStreaming :: ServerStreamingType side Request Response
+  }
+
+type family ServerStreamingType (side :: NetworkSide) input output where
+  ServerStreamingType Server input output =
+      input -> (output -> IO ()) -> IO ()
+
+  ServerStreamingType Client input output =
+      forall r. input -> (IO (Maybe output) -> IO r) -> IO r
+\end{minted}
+This seems like it would work, but in fact the existence of the \texttt{forall} on the client-side is ``illegally polymorphic'' in GHC's eyes, and it will refuse to compile such a thing. Giving it up would mean we wouldn't be able to return arbitrarily-computed values on the client-side while streaming data from the server. Users of the library might be able to get around it by invoking \texttt{IORefs} or something, but it would be ugly and non-idiomatic.
+
+So that, along with wanting to be backend-agnostic, made this approach a no-go. Luckily, my brilliant coworker \href{https://github.com/judah}{Judah Jacobson} (who is coincidentally also the author of proto-lens), suggested we instead generate metadata for RPC services in proto-lens, and let backend library code figure it out from there.
+
+With all of that context out of the way, we're ready to get into the actual meat of the post. Finally.
+
+
+\section{Generating Metadata}
+
+According to the \href{https://developers.google.com/protocol-buffers/docs/reference/proto3-spec}{spec}, a protobuffer service may contain zero or more RPC methods. Each method has a request and response type, either of which might be marked as streaming.
+
+While we could represent this metadata at the term-level, that won't do us any favors in terms of getting type-safe bindings to this stuff. And so, we instead turn to \texttt{TypeFamilies}, \texttt{DataKinds} and \texttt{GHC.TypeLits}.
+
+For reasons that will become clear later, we chose to represent RPC services via types, and methods in those services as symbols (type-level strings). The relevant typeclasses look like this:
+
+\begin{minted}{haskell}
+class Service s where
+  type ServiceName    s :: Symbol
+
+class HasMethod s (m :: Symbol) where
+  type MethodInput       s m :: *
+  type MethodOutput      s m :: *
+  type IsClientStreaming s m :: Bool
+  type IsServerStreaming s m :: Bool
+\end{minted}
+For example, the instances generated for the RPC service:
+
+\begin{minted}{haskell}
+service MyService {
+  rpc BiDiStreaming(stream Request) returns(stream Response);
+}
+\end{minted}
+would look like this:
+
+\begin{minted}{haskell}
+data MyService = MyService
+
+instance Service MyService where
+  type ServiceName    MyService = "myService"
+
+instance HasMethod MyService "biDiStreaming" where
+  type MethodInput       MyService "biDiStreaming" = Request
+  type MethodOutput      MyService "biDiStreaming" = Response
+  type IsClientStreaming MyService "biDiStreaming" = 'True
+  type IsServerStreaming MyService "biDiStreaming" = 'True
+\end{minted}
+You'll notice that these typeclasses perfectly encode all of the information we had in the protobuffer definition. The idea is that with all of this metadata available to them, specific backends can generate type-safe interfaces to these RPCs. We'll walk through the implementation of the gRPC bindings together.
+
+\section{The Client Side}
+
+The client side of things is relatively easy. We can the HasMethod instance directly:
+
+\begin{minted}{haskell}
+runNonStreamingClient
+    :: HasMethod s m
+    => s
+    -> Proxy m
+    -> MethodInput s m
+    -> IO (Either GRPCError (MethodOutput s m))
+runNonStreamingClient =  -- call the underlying gRPC code
+
+runServerStreamingClient
+    :: HasMethod s m
+    => s
+    -> Proxy m
+    -> MethodInput s m
+    -> (IO (Either GRPCError (Maybe (MethodOutput s m)) -> IO r)
+    -> IO r
+runServerStreamingClient =  -- call the underlying gRPC code
+
+-- etc
+\end{minted}
+This is a great start! We've got the interface we wanted for the server-streaming code, and our functions are smart enough to require the correct request and response types.
+
+However, there's already some type-unsafety here; namely that nothing stops us from calling \texttt{runNonStreamingClient} on a streaming method, or other such silly things.
+
+Thankfully the fix is quite easy -- we can use type-level equality to force callers to be attentive to the streaming-ness of the method:
+
+\begin{minted}{haskell}
+runNonStreamingClient
+    :: ( HasMethod s m
+       , IsClientStreaming s m ~ 'False
+       , IsServerStreaming s m ~ 'False
+       )
+    => s
+    -> Proxy m
+    -> MethodInput s m
+    -> IO (Either GRPCError (MethodOutput s m))
+
+runServerStreamingClient
+    :: ( HasMethod s m
+       , IsClientStreaming s m ~ 'False
+       , IsServerStreaming s m ~ 'True
+       )
+    => s
+    -> Proxy m
+    -> MethodInput s m
+    -> (IO (Either GRPCError (Maybe (MethodOutput s m)) -> IO r)
+    -> IO r
+
+-- et al.
+\end{minted}
+Would-be callers attempting to use the wrong function for their method will now be warded off by the type-system, due to the equality constraints being unable to be discharged. Success!
+
+The actual usability of this code leaves much to be desired (it requires being passed a proxy, and the type errors are absolutely \textit{disgusting}), but we'll circle back on improving it later. As it stands, this code is type-safe, and that's good enough for us for the time being.
+
+\section{The Server Side}
+
+\subsection{Method Discovery}
+
+Prepare yourself (but don't panic!): the server side of things is significantly more involved.
+
+In order to run a server, we're going to need to be able to handle any sort of request that can be thrown at us. That means we'll need an arbitrary number of handlers, depending on the service in question. An obvious thought would be to generate a record we could consume that would contain handlers for every method, but there's no obvious place to generate such a thing. Recall: proto-lens can't, since such a type would be backend-specific, and so our only other strategy down this path would be Template Haskell. Yuck.
+
+Instead, recall that we have an instance of \texttt{HasMethod} for every method on \texttt{Service s} -- maybe we could exploit that information somehow? Unfortunately, without Template Haskell, there's no way to discover typeclass instances.
+
+But that doesn't mean we're stumped. Remember that we control the code generation, and so if the representation we have isn't powerful enough, we can change it. And indeed, the representation we have isn't quite enough. We can go from a\texttt{ HasMethod s m} to its \texttt{Service s}, but not the other way. So let's change that.
+
+We change the Service class slightly:
+
+\begin{minted}{haskell}
+class Service s where
+  type ServiceName    s :: Symbol
+  type ServiceMethods s :: [Symbol]
+\end{minted}
+If we ensure that the \texttt{ServiceMethods s} type family always contains an element for every instance of \texttt{HasService}, we'll be able to use that info to discover our instances. For example, our previous \texttt{MyService} will now get generated thusly:
+
+\begin{minted}{haskell}
+data MyService = MyService
+
+instance Service MyService where
+  type ServiceName    MyService = "myService"
+  type ServiceMethods MyService = '["biDiStreaming"]
+
+instance HasMethod MyService "biDiStreaming" where
+  type MethodInput       MyService "biDiStreaming" = Request
+  type MethodOutput      MyService "biDiStreaming" = Response
+  type IsClientStreaming MyService "biDiStreaming" = 'True
+  type IsServerStreaming MyService "biDiStreaming" = 'True
+\end{minted}
+and we would likewise add the \texttt{m} for any other \texttt{HasMethod MyService m} instances if they existed.
+
+This seems like we can now use \texttt{ServiceMethods s} to get a list of methods, and then somehow type-level \texttt{map} over them to get the \texttt{HasMethod s m} constraints we want.
+
+And we almost can, except that we haven't told the type-system that \texttt{ServiceMethods s} relates to \texttt{HasService s} m instances in this way. We can add a superclass constraint to \texttt{Service} to do this:
+
+\begin{minted}{haskell}
+class HasAllMethods s (ServiceMethods s) => Service s where
+  -- as before
+\end{minted}
+But what is this \texttt{HasAllMethods} thing? It's a specialized type-level \texttt{map} which turns our list of methods into a bunch of constraints proving we have \texttt{HasMethod s m} for every \texttt{m} in that promoted list.
+
+\begin{minted}{haskell}
+class HasAllMethods s (xs :: [Symbol])
+
+instance HasAllMethods s '[]
+instance (HasMethod s x, HasAllMethods s xs) => HasAllMethods s (x ': xs)
+\end{minted}
+We can think of \texttt{xs} here as the list of constraints we want. Obviously if we don't want any constraints (the \texttt{`[]} case), we trivially have all of them. The other case is induction: if we have a non-empty list of constraints we're looking for, that's the same as looking for the tail of the list, and having the constraint for the head of it.
+
+Read through these instances a few times; make sure you understand the approach before continuing, because we're going to keep using this technique in scarier and scarier ways.
+
+With this \texttt{HasAllMethods} superclass constraint, we can now convince ourselves (and, more importantly, GHC), that we can go from a \texttt{Service s} constraint to all of its \texttt{HasMethod s m} constraints. Cool!
+
+\subsection{Typing the Server}
+
+
+We return to thinking about how to actually run a server. As we've discussed, such a function will need to be able to handle every possible method, and, unfortunately, we can't pack them into a convenient data structure.
+
+Our actual implementation of such a thing might take a list of handlers. But recall that each handler has different input and output types, as well as different shapes depending on which bits of it are streaming. We can make this approach work by \href{http://reasonablypolymorphic.com/existentialization/}{existentializing} away all of the details.
+
+While it works as far as the actual implementation of the underlying gRPC goes, we're left with a great sense of uneasiness. We have no guarantees that we've provided a handler for every method, and the very nature of existentialization means we have absolutely no guarantees that any of these things are the right ype.
+
+Our only recourse is to somehow use our \texttt{Service s} constraint to put a prettier facade in front of this ugly-if-necessary implementation detail.
+
+The actual interface we'll eventually provide will, for example, for a service with two methods, look like this:
+
+\begin{minted}{haskell}
+runServer :: HandlerForMethod1 -> HandlerForMethod2 -> IO ()
+\end{minted}
+Of course, we can't know a priori how many methods there will be (or what type their handlers should have, for that matter). We'll somehow need to extract this information from \texttt{Service s} -- which is why we previously spent so much effort on making the methods discoverable.
+
+The technique we'll use is the same one you'll find yourself using again and again when you're programming at the type-level. We'll make a typeclass with an associated type family, and then provide a base case and an induction case.
+
+\begin{minted}{haskell}
+class HasServer s (xs :: [Symbol]) where
+  type ServerType s xs :: *
+\end{minted}
+We need to make the methods \texttt{xs} explicit as parameters in the typeclass, so that we can reduce them. The base case is simple -- a server with no more handlers is just an \texttt{IO} action:
+
+\begin{minted}{haskell}
+instance HasServer s '[] where
+  type ServerType s '[] = IO ()
+\end{minted}
+The induction case, however, is much more interesting:
+
+\begin{minted}{haskell}
+instance ( HasMethod s x
+         , HasMethodHandler s x
+         , HasServer s xs
+         ) => HasServer s (x ': xs) where
+  type ServerType s (x ': xs) = MethodHandler s x -> ServerType s xs
+\end{minted}
+The idea is that as we pull methods \texttt{x} off our list of methods to handle, we build a function type that takes a value of the correct type to handle method \texttt{x}, which will take another method off the list until we're out of methods to handle. This is exactly a type-level fold over a list.
+
+The only remaining question is ``what is this \texttt{MethodHandler} thing?'' It's going to have to be a type family that will give us back the correct type for the handler under consideration. Such a type will need to dispatch on the streaming variety as well as the request and response, so we'll define it as follows, and go back and fix \texttt{HasServer} later.
+
+\begin{minted}{haskell}
+class HasMethodHandler input output (cs :: Bool) (ss :: Bool) where
+  type MethodHandler input output cs ss :: *
+\end{minted}
+\texttt{cs} and \texttt{ss} refer to whether we're looking for client-streaming and/or server-streaming types, respectively.
+
+Such a thing could be a type family, but isn't because we'll need its class-ness later in order to actually provide an implementation of all of this stuff. We provide the following instances:
+
+\begin{minted}{haskell}
+-- non-streaming
+instance HasMethodHandler input output 'False 'False where
+  type MethodHandler input output 'False 'False =
+    input -> IO output
+
+-- server-streaming
+instance HasMethodHandler input output 'False 'True where
+  type MethodHandler input output 'False 'True =
+    input -> (output -> IO ()) -> IO ()
+
+-- etc for client and bidi streaming
+\end{minted}
+With \texttt{MethodHandler} now powerful enough to give us the types we want for handlers, we can go back and fix \texttt{HasServer} so it will compile again:
+
+\begin{minted}{haskell}
+instance ( HasMethod s x
+         , HasMethodHandler (MethodInput       s x)
+                            (MethodOutput      s x)
+                            (IsClientStreaming s x)
+                            (IsServerStreaming s x)
+         , HasServer s xs
+         ) => HasServer s (x ': xs) where
+  type ServerType s (x ': xs)
+      = MethodHandler (MethodInput       s x)
+                      (MethodOutput      s x)
+                      (IsClientStreaming s x)
+                      (IsServerStreaming s x)
+     -> ServerType s xs
+\end{minted}
+It's not pretty, but it works! We can convince ourselves of this by asking ghci:
+
+\begin{minted}{haskell}
+ghci> :kind! ServerType MyService (ServiceMethods MyService)
+
+(Request -> (Response -> IO ()) -> IO ()) -> IO () :: *
+\end{minted}
+and, if we had other methods defined for \texttt{MyService}, they'd show up here with the correct handler type, in the order they were listed in \texttt{ServiceMethods MyService}.
+
+\subsection{Implementing the Server}
+
+
+Our \texttt{ServerType} family now expands to a function type which takes a handler value (of the correct type) for every method on our service. That turns out to be more than half the battle -- all we need to do now is to provide a value of this type.
+
+The generation of such a value is going to need to proceed in perfect lockstep with the generation of its type, so we add to the definition of \texttt{HasServer}:
+
+\begin{minted}{haskell}
+class HasServer s (xs :: [Symbol]) where
+  type ServerType s xs :: *
+  runServerImpl :: [AnyHandler] -> ServerType s xs
+\end{minted}
+What is this \texttt{[AnyHandler]} thing, you might ask. It's an explicit accumulator for existentialized handlers we've collected during the fold over \texttt{xs}. It'll make sense when we look at the induction case.
+For now, however, the base case is trivial as always:
+
+\begin{minted}{haskell}
+instance HasServer s '[] where
+  type ServerType s '[] = IO ()
+  runServerImpl handlers = runGRPCServer handlers
+\end{minted}{
+where \texttt{runGRPCServer} is the underlying server provided by Awake's library.
+We move to the induction case:
+
+\begin{minted}{haskell}
+instance ( HasMethod s x
+         , HasMethodHandler (MethodInput       s x)
+                            (MethodOutput      s x)
+                            (IsClientStreaming s x)
+                            (IsServerStreaming s x)
+         , HasServer s xs
+         ) => HasServer s (x ': xs) where
+  type ServerType s (x ': xs)
+      = MethodHandler (MethodInput       s x)
+                      (MethodOutput      s x)
+                      (IsClientStreaming s x)
+                      (IsServerStreaming s x)
+     -> ServerType s xs
+  runServerImpl handlers f = runServerImpl (existentialize f : handlers)
+\end{minted}
+where \texttt{existentialize} is a new class method we add to \texttt{HasMethodHandler}. We will elide it here because it is just a function \texttt{MethodHandler i o cs mm -> AnyHandler} and is not particularly interesting if you're familiar with existentialization.
+
+It's evident here what I meant by \texttt{handlers} being an explicit accumulator -- our recursion adds the parameters it receives into this list so that it can pass them eventually to the base case.
+
+There's a problem here, however. Reading through this implementation of \texttt{run\-Server\-Impl}, you and I both know what the right-hand-side means, unfortunately GHC isn't as clever as we are. If you try to compile it right now, GHC will complain about the non-injectivity of \texttt{HasServer} as implied by the call to \texttt{runServerImpl} (and also about \texttt{HasMethodHandler} and \texttt{existentialize}, but for the exact same reason.)
+
+The problem is that there's nothing constraining the type variables \texttt{s} and \texttt{xs} on \texttt{runServerImpl}. I always find this error confusing (and I suspect everyone does), because in my mind it's perfectly clear from the \texttt{HasServer s xs} in the instance constraint. However, because \texttt{SeverType} is a type family without any injectivity declarations, it means we can't learn \texttt{s} and \texttt{xs} from \texttt{ServerType s xs}.
+
+Let's see why. For a very simple example, let's look at the following type family:
+
+\begin{minted}{haskell}
+type family NotInjective a where
+  NotInjective Int  = ()
+  NotInjective Bool = ()
+\end{minted}
+Here we have \texttt{NotInjective Int \~{} ()} and \texttt{NotInjective Bool \~{} ()}, which means even if we know \texttt{NotInjective a \~{} ()} it doesn't mean that we know what \texttt{a} is -- it could be either \texttt{Int} or \texttt{Bool}.
+
+This is the exact problem we have with \texttt{runServerImpl}: even though we know what type \texttt{runServerImpl} has (it must be \texttt{ServerType s xs}, so that the type on the left-hand of the equality is the same as on the right), that doesn't mean we know what s and xs are! The solution is to explicitly tell GHC via a type signature or type application:
+
+\begin{minted}{haskell}
+instance ( HasMethod s x
+         , HasMethodHandler (MethodInput       s x)
+                            (MethodOutput      s x)
+                            (IsClientStreaming s x)
+                            (IsServerStreaming s x)
+         , HasServer s xs
+         ) => HasServer s (x ': xs) where
+  type ServerType s (x ': xs)
+      = MethodHandler (MethodInput       s x)
+                      (MethodOutput      s x)
+                      (IsClientStreaming s x)
+                      (IsServerStreaming s x)
+     -> ServerType s xs
+  runServerImpl handlers f = runServerImpl @s @xs (existentialize f : handlers)
+\end{minted}
+(For those of you playing along at home, you'll need to type-apply the monstrous MethodInput and friends to the existentialize as well.)
+
+And finally, we're done! We can slap a prettier interface in front of this runServerImpl to fill in some of the implementation details for us:
+
+\begin{minted}{haskell}
+runServer
+    :: forall s
+     . ( Service s
+       , HasServer s (ServiceMethods s)
+       )
+    => s
+    -> ServerType s (ServiceMethods s)
+runServer _ = runServerImpl @s @(ServiceMethods s) []
+\end{minted}
+Sweet and typesafe! Yes!
+
+\section{Client-side Usability}
+
+Sweet and typesafe all of this might be, but the user-friendliness on the client-side leaves a lot to be desired. As promised, we'll address that now.
+
+\subsection{Removing Proxies}
+
+Recall that the \texttt{runNonStreamingClient} function and its friends require a \texttt{Proxy m} parameter in order to specify the method you want to call. However, \texttt{m} has kind \texttt{Symbol}, and thankfully we have some new extensions in GHC for turning \texttt{Symbol}s into values.
+
+We can define a new type, isomorphic to \texttt{Proxy}, but which packs the fact that it is a \texttt{KnownSymbol} (something we can turn into a \texttt{String} at runtime):
+
+\begin{minted}{haskell}
+data WrappedMethod (sym :: Symbol) where
+  WrappedMethod :: KnownSymbol sym => WrappedMethod sym
+\end{minted}
+We change our \texttt{run*Client} friends to take this \texttt{WrappedMethod} m instead of the \texttt{Proxy m} they used to:
+
+\begin{minted}{haskell}
+runNonStreamingClient
+    :: ( HasMethod s m
+       , IsClientStreaming s m ~ 'False
+       , IsServerStreaming s m ~ 'False
+       )
+    => s
+    -> WrappedMethod m
+    -> MethodInput s m
+    -> IO (Either GRPCError (MethodOutput s m))
+\end{minted}
+and, with this change in place, we're ready for the magic syntax I promised earlier.
+
+\begin{minted}{haskell}
+import GHC.OverloadedLabel
+
+instance ( KnownSymbol sym
+         , sym ~ sym'
+         ) => IsLabel sym (WrappedMethod sym') where
+  fromLabel _ = WrappedMethod
+\end{minted}
+This \texttt{sym \~{} sym'} thing is known as the \href{http://chrisdone.com/posts/haskell-constraint-trick}{constraint trick for instances}, and is necessary here to convince GHC that this can be the only possible instance of \texttt{IsLabel} that will give you back \texttt{WrappedMethods}.
+
+Now turning on the \texttt{\{-\# LANGUAGE OverloadedLabels \#-}\} pragma, we've changed the syntax to call these client functions from the ugly:
+
+\begin{minted}{haskell}
+runBiDiStreamingClient MyService (Proxy @"biDiStreaming")
+\end{minted}
+into the much nicer:
+
+\begin{minted}{haskell}
+runBiDiStreamingClient MyService #biDiStreaming
+\end{minted}
+
+
+\subsection{Better ``Wrong Streaming Variety'' Errors}
+
+The next step in our journey to delightful usability is remembering that the users of our library are only human, and at some point they are going to call the wrong \texttt{run*Client} function on their method with a different variety of streaming semantics.
+
+At the moment, the errors they're going to get when they try that will be a few stanza long, the most informative of which will be something along the lines of \texttt{unable to match 'False with 'True}. Yes, it's technically correct, but it's entirely useless.
+
+Instead, we can use the \texttt{TypeError} machinery from \texttt{GHC.TypeLits} to make these error messages actually helpful to our users. If you aren't familiar with it, if GHC ever encounters a \texttt{TypeError} constraint it will die with a error message of your choosing.
+
+We will introduce the following type family:
+
+\begin{minted}{haskell}
+type family RunNonStreamingClient (cs :: Bool) (ss :: Bool) :: Constraint where
+  RunNonStreamingClient 'False 'False = ()
+  RunNonStreamingClient 'False 'True = TypeError
+      ( Text "Called 'runNonStreamingClient' on a server-streaming method."
+   :$$: Text "Perhaps you meant 'runServerStreamingClient'."
+      )
+  RunNonStreamingClient 'True 'False = TypeError
+      ( Text "Called 'runNonStreamingClient' on a client-streaming method."
+   :$$: Text "Perhaps you meant 'runClientStreamingClient'."
+      )
+  RunNonStreamingClient 'True 'True = TypeError
+      ( Text "Called 'runNonStreamingClient' on a bidi-streaming method."
+   :$$: Text "Perhaps you meant 'runBiDiStreamingClient'."
+      )
+\end{minted}
+The \texttt{:\$\$:} type operator stacks message vertically, while \texttt{:<>:} stacks it horizontally.
+
+We can change the constraints on \texttt{runNonStreamingClient}:
+
+\begin{minted}{haskell}
+runNonStreamingClient
+    :: ( HasMethod s m
+       , RunNonStreamingClient (IsClientStreaming s m)
+                               (IsServerStreaming s m)
+       )
+    => s
+    -> WrappedMethod m
+    -> MethodInput s m
+    -> IO (Either GRPCError (MethodOutput s m))
+\end{minted}
+and similarly for our other client functions. Reduction of the resulting boilerplate is left as an exercise to the reader.
+
+With all of this work out of the way, we can test it:
+
+\begin{minted}{haskell}
+runNonStreamingClient MyService #biDiStreaming
+
+Main.hs:45:13: error:
+    * Called 'runNonStreamingClient' on a bidi-streaming method.
+      Perhaps you meant 'runBiDiStreamingClient'.
+    * In the expression: runNonStreamingClient MyService #bidi
+\end{minted}
+Amazing!
+
+\subsection{Better ``Wrong Method'' Errors}
+
+
+The other class of errors we expect our users to make is to attempt to call a method that doesn't exist -- either because they made a typo, or are forgetful of which methods exist on the service in question.
+
+As it stands, users are likely to get about six stanzas of error messages, from \texttt{No instance for (HasMethod s m)} to \texttt{Ambiguous type variable 'm0'}, and other terrible things that leak our implementation details. Our first thought might be to somehow emit a \texttt{TypeError} constraint if we don't have a \texttt{HasMethod s m} instance, but I'm not convinced such a thing is possible.
+
+But luckily, we can actually do better than any error messages we could produce in that way. Since our service is driven by a value (in our example, the data constructor \texttt{MyService}), by the time things go wrong we do have a \texttt{Service s} instance in scope. Which means we can look up our \texttt{ServiceMethods s} and given some helpful suggestions about what the user probably meant.
+
+The first step is to implement a \texttt{ListContains} type family so we can determine if the method we're looking for is actually a real method.
+
+\begin{minted}{haskell}
+type family ListContains (n :: k) (hs :: [k]) :: Bool where
+  ListContains n '[]       = 'False
+  ListContains n (n ': hs) = 'True
+  ListContains n (x ': hs) = ListContains n hs
+\end{minted}
+In the base case, we have no list to look through, so our needle is trivially not in the haystack. If the head of the list is the thing we're looking for, then it must be in the list. Otherwise, take off the head of the list and continue looking. Simple really, right?
+
+We can now use this thing to generate an error message in the case that the method we're looking for is not in our list of methods:
+
+\begin{minted}{haskell}
+type family RequireHasMethod s (m :: Symbol) (found :: Bool) :: Constraint where
+  RequireHasMethod s m 'False = TypeError
+      ( Text "No method "
+   :<>: ShowType m
+   :<>: Text " available for service '"
+   :<>: ShowType s
+   :<>: Text "'."
+   :$$: Text "Available methods are: "
+   :<>: ShowType (ServiceMethods s)
+      )
+  RequireHasMethod s m 'True = ()
+\end{minted}
+If \texttt{found \~{} 'False}, then the method \texttt{m} we're looking for is not part of the service \texttt{s}. We produce a nice error message informing the user about this (using \texttt{ShowType} to expand the type variables).
+
+We will provide a type alias to perform this lookup:
+
+\begin{minted}{haskell}
+type HasMethod' s m =
+  ( RequireHasMethod s m (ListContains m (ServiceMethods s)
+  , HasMethod s m
+  )
+\end{minted}
+Our new \texttt{HasMethod' s m} has the same shape as \texttt{HasMethod}, but will expand to our custom type error if we're missing the method under scrutiny.
+
+Replacing all of our old \texttt{HasMethod} constraints with \texttt{HasMethod'} works fantastically:
+
+\begin{minted}{haskell}
+Main.hs:54:15: error:
+    * No method "missing" available for service 'MyService'.
+      Available methods are: '["biDiStreaming"]
+\end{minted}
+Damn near perfect! That list of methods is kind of ugly, though, so we can write a quick pretty printer for showing promoted lists:
+
+\begin{minted}{haskell}
+type family ShowList (ls :: [k]) :: ErrorMessage where
+  ShowList '[]  = Text ""
+  ShowList '[x] = ShowType x
+  ShowList (x ': xs) = ShowType x :<>: Text ", " :<>: ShowList xs
+\end{minted}
+Replacing our final \texttt{ShowType} with \texttt{ShowList} in \texttt{RequireHasMethod} now gives us error messages of the following:
+
+\begin{minted}{haskell}
+Main.hs:54:15: error:
+    * No method "missing" available for service 'MyService'.
+      Available methods are: "biDiStreaming"
+\end{minted}
+Absolutely gorgeous.
+
+\section{Conclusion}
+
+This is where we stop. We've used type-level metadata to generate client- and server-side bindings to an underlying library. Everything we've made is entirely typesafe, and provides gorgeous, helpful error messages if the user does anything wrong. We've found a practical use for many of these seemingly-obscure type-level features, and learned a few things in the process.
+
+In the words of my coworker \href{https://ren.zone/articles/opaleye-sot}{Renzo Carbonara}\footnote{Whose article ``Opaleye's sugar on top'' was a strong inspiration on me, and subsequently on this post.}:
+
+\textit{``It is up to us, as people who understand a problem at hand, to try and teach the type system as much as we can about that problem. And when we don't understand the problem, talking to the type system about it will help us understand. Remember, the type system is not magic, it is a logical reasoning tool.''}
+
+This resounds so strongly in my soul, and maybe it will in yours too. If so, I encourage you to go forth and find uses for these techniques to improve the experience and safety of your own libraries.

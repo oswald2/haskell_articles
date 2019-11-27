@@ -80,6 +80,35 @@ We don't need to know what the program does to apply this refactoring but knowin
          \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
 \end{minted}
 
+
+\doublecode{
+\begin{minted}{haskell}
+allRolls :: DiceChoice -> DiceState -> [ DiceState ]
+ allRolls [] ([], n) = [ ([], n-1) ]
+-allRolls [] _ = undefined
++allRolls [] _ =
++  error "Invariant violated: choices must be same length as vals"
+ allRolls (chosen:choices) (v:vs, n) =
+     allRolls choices (vs, n-1) >>=
+         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
+\end{minted}
+}
+{Test1}
+{ 
+\begin{minted}{haskell}
+ allRolls :: DiceChoice -> DiceState -> [ DiceState ]
+ allRolls [] ([], n) = [ ([], n-1) ]
+-allRolls [] _ = undefined
++allRolls [] _ =
++  error "Invariant violated: choices must be same length as vals"
+ allRolls (chosen:choices) (v:vs, n) =
+     allRolls choices (vs, n-1) >>=
+         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
+\end{minted}
+}
+{Test2}
+
+
 \section{Avoid catch-all pattern}
 
 I prefer to have as few overlapping patterns as possible, even ``catch-all'' \texttt{(\_)} patterns. This is a fairly minor change, but let's do it anyway. I think it modestly improves the design.

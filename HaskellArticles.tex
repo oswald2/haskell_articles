@@ -482,18 +482,276 @@ This is by no means a comprehensive list, just the ones that have been most usef
 \subsection{``Different paths, same destination''}
 \label{sec:different_paths_same_destination}
 
+These kinds of properties are based on combining operations in different orders, but getting the same result. For example, in the diagram below, doing $X$ then $Y$ gives the same result as doing $Y$ followed by $X$ (see figure \ref{fig:choosing_properties_1}).
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_1.png}
+ \caption{Commutative Properties}
+ \label{fig:choosing_properties_1}
+\end{figure}
+The commutative property of addition is an obvious example of this pattern. For example, the result of add 1 then add 2 is the same as the result of add 2 followed by add 1.
+
+This pattern, generalized, can produce a wide range of useful properties. We'll see some more uses of this pattern later in this post.
+
+
 \subsection{``There and back again''}
 \label{sec:there_and_back_again}
+
+These kinds of properties are based on combining an operation with its inverse, ending up with the same value you started with.
+
+In the diagram below, doing $X$ serializes ABC to some kind of binary format, and the inverse of $X$ is some sort of deserialization that returns the same ABC value again (see figure \ref{fig:choosing_properties_2}).
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_2.png}
+ \caption{Inverse Properties}
+ \label{fig:choosing_properties_2}
+\end{figure}
+In addition to serialization/deserialization, other pairs of operations can be checked this way: \texttt{addition}/\texttt{subtraction}, \texttt{write}/\texttt{read}, \texttt{setProperty}/\texttt{getProperty}, and so on.
+
+Other pair of functions fit this pattern too, even though they are not strict inverses, pairs such as \texttt{insert}/\texttt{contains}, \texttt{create}/\texttt{exists} , etc.
+
+
+
 \subsection{``Some things never change''}
 \label{sec:some_things_never_change}
+
+These kinds of properties are based on an invariant that is preserved after some transformation.
+
+In the diagram below (figure \ref{fig:choosing_properties_3}), the transform changes the order of the items, but the same four items are still present afterwards.
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_3.png}
+ \caption{Invariant Properties}
+ \label{fig:choosing_properties_3}
+\end{figure}
+Common invariants include size of a collection (for \texttt{map} say), the contents of a collection (for sort say), the height or depth of something in proportion to size (e.g. balanced trees).
+
 \subsection{``The more things change, the more they stay the same''}
 \label{sec:the_more_things_change}
+
+These kinds of properties are based on ``idempotence'' -- that is, doing an operation twice is the same as doing it once.
+
+In the diagram below (figure \ref{fig:choosing_properties_4}), using distinct to filter the set returns two items, but doing distinct twice returns the same set again.
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_4.png}
+ \caption{Idempotent Properties}
+ \label{fig:choosing_properties_4}
+\end{figure}
+Idempotence properties are very useful, and can be extended to things like database updates and message processing.
+
+
+
 \subsection{``Solve a smaller problem first''}
 \label{sec:solve_a_smaller_problem_first}
+
+These kinds of properties are based on ``structural induction'' -- that is, if a large thing can be broken into smaller parts, and some property is true for these smaller parts, then you can often prove that the property is true for a large thing as well.
+
+In the diagram below (figure \ref{fig:choosing_properties_5}), we can see that the four-item list can be partitioned into an item plus a three-item list, which in turn can be partitioned into an item plus a two-item list. If we can prove the property holds for two-item list, then we can infer that it holds for the three-item list, and for the four-item list as well.
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_5.png}
+ \caption{Induction Properties}
+ \label{fig:choosing_properties_5}
+\end{figure}
+Induction properties are often naturally applicable to recursive structures such as lists and trees.
+
+
+
 \subsection{``Hard to prove, easy to verify''}
 \label{sec:hard_to_prove}
+
+Often an algorithm to find a result can be complicated, but verifying the answer is easy.
+
+In the diagram below (figure \ref{fig:choosing_properties_6}), we can see that finding a route through a maze is hard, but checking that it works is trivial!
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_6.png}
+ \caption{Easy to Verify Properties}
+ \label{fig:choosing_properties_6}
+\end{figure}
+Many famous problems are of this sort, such as prime number factorization. But this approach can be used for even simple problems.
+
+For example, you might check that a string tokenizer works by just concatenating all the tokens again. The resulting string should be the same as what you started with.
+
 \subsection{``The test oracle''}
 \label{sec:the_test_oracle}
+
+In many situations you often have an alternate version of an algorithm or process (a ``test oracle'') that you can use to check your results (figure \ref{fig:choosing_properties_7}).
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_7.png}
+ \caption{Test Oracle}
+ \label{fig:choosing_properties_7}
+\end{figure}
+For example, you might have a high-performance algorithm with optimization tweaks that you want to test. In this case, you might compare it with a brute force algorithm that is much slower but is also much easier to write correctly.
+
+Similarly, you might compare the result of a parallel or concurrent algorithm with the result of a linear, single thread version.
+
+
+\section{Putting the categories to work with some real examples}
+
+
+In this section, we'll apply these categories to see if we can come up with properties for some simple functions such as ``sort a list'' and ``reverse a list''.
+
+\subsection{``Different paths, same destination'' applied to a list sort}
+
+
+Let's start with ``different paths, same destination'' and apply it to a ``list sort'' function.
+
+Can we think of any way of combining an operation \textit{before} \texttt{List.sort}, and another operation \textit{after} \texttt{List.sort}, so that you should end up with the same result? That is, so that ``going up then across the top'' is the same as ``going across the bottom then up''.
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_8.png}
+ \caption{List Sort Property}
+ \label{fig:choosing_properties_8}
+\end{figure}
+How about this?
+
+\begin{itemize}
+\item \textbf{Path 1}: We add one to each element of the list, then sort.
+\item \textbf{Path 2}: We sort, then add one to each element of the list.
+\item Both lists should be equal.
+\end{itemize}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_9.png}
+ \caption{List Sort Property +1}
+ \label{fig:choosing_properties_9}
+\end{figure}
+Here's some code that implements that property:
+
+\begin{minted}{fsharp}
+let ``+1 then sort should be same as sort then +1`` sortFn aList = 
+    let add1 x = x + 1
+    
+    let result1 = aList |> sortFn |> List.map add1
+    let result2 = aList |> List.map add1 |> sortFn 
+    result1 = result2
+
+// test 
+let goodSort = List.sort
+Check.Quick (``+1 then sort should be same as sort then +1`` goodSort)
+// Ok, passed 100 tests.
+\end{minted}
+Well, that works, but it also would work for a lot of other transformations too. For example, if we implemented \texttt{List.sort} as just the identity, then this property would be satisfied equally well! You can test this for yourself:
+
+\begin{minted}{fsharp}
+let badSort aList = aList
+Check.Quick (``+1 then sort should be same as sort then +1`` badSort)
+// Ok, passed 100 tests.
+\end{minted}
+The problem with this property is that it is not exploiting any of the ''sortedness``. We know that a sort will probably reorder a list, and certainly, the smallest element should be first.
+
+How about adding an item that we know will come at the front of the list after sorting?
+
+\begin{itemize}
+\item \textbf{Path 1}: We append Int32.MinValue to the end of the list, then sort.
+\item \textbf{Path 2}: We sort, then prepend Int32.MinValue to the front of the list.
+\item Both lists should be equal.
+\end{itemize}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_10.png}
+ \caption{List Sort Property with \texttt{Int32.MinValue}}
+ \label{fig:choosing_properties_10}
+\end{figure}
+Here's the code:
+
+\begin{minted}{fsharp}
+let ``append minValue then sort should be same as sort then prepend minValue`` 
+    sortFn aList = 
+        let minValue = Int32.MinValue
+
+        let appendThenSort = (aList @ [minValue]) |> sortFn 
+        let sortThenPrepend = minValue :: (aList |> sortFn)
+        appendThenSort = sortThenPrepend 
+
+// test
+Check.Quick (``append minValue then sort should be same as sort then 
+    prepend minValue`` goodSort)
+// Ok, passed 100 tests.
+\end{minted}
+The bad implementation fails now!
+
+\begin{minted}{fsharp}
+Check.Quick (``append minValue then sort should be same as sort then 
+    prepend minValue`` badSort)
+// Falsifiable, after 1 test (2 shrinks) 
+// [0]
+\end{minted}
+In other words, the bad sort of \texttt{[0; minValue]} is \textit{not} the same as \texttt{[minValue; 0]}.
+So that's good!
+
+But\ldots we've got some hard coded things in there that the Enterprise Developer From Hell (\href{https://fsharpforfunandprofit.com/posts/property-based-testing/}{see previous post}) could take advantage of! The EDFH will exploit the fact that we always use \texttt{Int32.MinValue} and that we always prepend or append it to the test list.
+
+In other words, the EDFH can identify which path we are on and have special cases for each one:
+
+\begin{minted}{fsharp}
+// The Enterprise Developer From Hell strikes again
+let badSort2 aList = 
+	match aList with
+	| [] -> []
+	| _ -> 
+		let last::reversedTail = List.rev aList 
+		if (last = Int32.MinValue) then
+			// if min is last, move to front
+			let unreversedTail = List.rev reversedTail
+			last :: unreversedTail 
+		else
+			aList // leave alone
+\end{minted}
+And when we check it\ldots
+
+\begin{minted}{fsharp}
+// Oh dear, the bad implementation passes!
+Check.Quick (``append minValue then sort should be same as sort then 
+    prepend minValue`` badSort2)
+// Ok, passed 100 tests.
+\end{minted}
+We could fix this by (a) picking a random number smaller than any number in the list and (b) inserting it at a random location rather than always appending it. But rather than getting too complicated, let's stop and reconsider.
+
+An alternative approach which also exploits the ''sortedness`` is to first negate all the values, then on the path that negates \textit{after} the sort, add an extra reverse as well.
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=.95\linewidth]{./pics/choosing_properties_11.png}
+ \caption{List Sort Property with negate}
+ \label{fig:choosing_properties_11}
+\end{figure}
+\begin{minted}{fsharp}
+let ``negate then sort should be same as sort then negate then reverse`` 
+    sortFn aList = 
+        let negate x = x * -1
+
+        let negateThenSort = aList |> List.map negate |> sortFn 
+        let sortThenNegateAndReverse = aList |> sortFn |> List.map 
+                negate |> List.rev
+        negateThenSort = sortThenNegateAndReverse 
+\end{minted}
+This property is harder for the EDFH to beat because there are no magic numbers to help identify which path you are on:
+
+\begin{minted}{fsharp}
+// test
+Check.Quick ( ``negate then sort should be same as sort then negate then 
+    reverse`` goodSort)
+// Ok, passed 100 tests.
+
+// test
+Check.Quick ( ``negate then sort should be same as sort then negate then 
+    reverse``  badSort)
+// Falsifiable, after 1 test (1 shrinks) 
+// [1; 0]
+
+// test
+Check.Quick ( ``negate then sort should be same as sort then negate then 
+    reverse``  badSort2)
+// Falsifiable, after 5 tests (3 shrinks) 
+// [1; 0]
+\end{minted}
+You might argue that we are only testing sorting for lists of integers. But the \texttt{List.sort} function is generic and knows nothing about integers per se, so I have high confidence that this property does test the core sorting logic.
+
+
+
 
 
 

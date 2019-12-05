@@ -1,0 +1,487 @@
+\chapter{Finding Property Tests - Hillel Wayne}
+\label{sec:finding_property_tests}
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yao:}}
+\textit{More starting points for figuring out what properties to test.}
+
+\vspace{\baselineskip}
+\noindent\textit{Original article: \cite{finding_properties}}
+\end{quotation}
+
+A while back I was ranting about APLs and included this python code to
+get the mode of a list:
+
+\begin{minted}{python}
+def mode(l):
+  max = None
+  count = {}
+  for x in l:
+    if x not in count:
+      count[x] = 0
+    count[x] += 1
+    if not max or count[x] > count[max]:
+      max = x
+  return max
+\end{minted}
+There's a bug in it. Do you see it? If not, try running it on the list
+\texttt{{[}0,\ 0,\ 1{]}}:
+
+\begin{minted}{python}
+>>> mode([0, 0, 1])
+1
+\end{minted}
+The issue is that 0 is falsy, so if max is 0, \texttt{if\ not\ max} is
+true.
+
+I could say this bug was a result of carelessness. I didn't write any
+tests for this function, just tried a few obvious examples and thought
+``yeah it works''. But I don't think writing bespoke manual unit tests
+would have caught this. To surface the bug, the mode of a list must be a
+falsy value like 0 or \texttt{{[}{]}} \emph{and} the last value of the
+list must be something else. It's a small intersection of Python's
+typing and the mechanics of \texttt{mode}, making it too unusual a case
+to be found by standard unit testing practice.
+
+A different testing style is property based testing (PBT) with
+\href{https://www.hillelwayne.com/post/contracts/}{contracts}. By
+generating a random set of inputs, we cover more of the state space than
+we'd do manually. The problem with PBT, though, is that it can be hard
+to find good properties. I'd like to take mode as a case study in what
+properties we could come up with.
+There are a few things I'm looking for:
+
+\begin{itemize}
+
+\item
+  The property test should find the bug.
+\item
+  The test should be \emph{simple}. I'm presumably not putting a lot of
+  effort into testing such a simple function, so a complex test doesn't
+  accurately capture what I'd do.
+\item
+  The test should be \emph{obvious}. I'm looking for a natural test that
+  finds the bug, not a post-hoc one. Catching a bug with tests is much
+  less believable if you already know what you're looking for.
+\end{itemize}
+
+So, let's talk some tests and contracts! I'm using
+\href{http://hypothesis.works/}{hypothesis} for the property tests,
+\href{https://github.com/deadpixi/contracts}{dpcontracts} for my
+contracts library, \href{https://docs.pytest.org/en/latest/}{pytest} for
+the runner\footnote{Oddly enough I'm getting increasingly less sold on using pytest, purely because I want to experiment with weird janky metaprogramming in my tests and pytest doesn't really support that.}.
+For the sake of this problem, assume we're only passing in nonempty
+lists.
+
+\begin{minted}{python}
+@require("l must not be empty", lambda args: len(args.l) > 0)
+def mode(l):
+  ...
+\end{minted}
+
+\section{Contract-wise}\label{contract-wise}
+
+One property of a function is ``all of the contracts are satisfied''. We
+can use this to write ``thin'' tests, where we don't put any assertions
+in the test itself. If any of our contracts raise an error then the test
+will fail.
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1))
+def test_mode(l):
+    mode(l)
+\end{minted}
+
+\subsection{Types}\label{types}
+
+Typically in dynamic programming languages, contracts are used as a poor
+replacement of a static type system. Instead of checking the type at
+compile time, people check the type at runtime. Most contract libraries
+are heavily geared towards this kind of use.
+
+\begin{minted}{python}
+@ensure("result is an int", lambda _, r: isinstance(r, int))
+\end{minted}
+This is a bad contract for three reasons:
+
+\begin{enumerate}
+\item
+  It requires the function to return integers when it's currently
+  generic. We \emph{could} try to make it generic by doing something
+  like \texttt{type(a.l)\ ==\ type(r)}, but \emph{ugh}.
+\item
+  We should be using mypy for type checks anyway.
+\item
+  It doesn't actually find the error. The problem isn't the type, it's
+  that we got the wrong result.
+\end{enumerate}
+
+\subsubsection{Sanity Checking}\label{sanity-checking}
+
+We can go further than replicating static types. One common type of
+contract is a ``sanity check'': some property that does not fully
+specify our code, but is easy to express and should hold true anyway.
+For example, we know the mode will be an element of the list, so why not
+check that we're returning an element of the list?
+
+\begin{minted}{python}
+@ensure("result is in list", lambda a, r: r in a.l)
+\end{minted}
+This is a pretty good contract! It tells us useful things about the
+function, and it's not easily replacable with a typecheck. If I was
+writing production code I'd probably write a lot of contracts like this.
+But it also doesn't find the problem, so we need to go further.
+
+\subsection{First element}\label{first-element}
+
+Our sanity check was only minimally related to our function. There are
+lots of functions that return elements in the list: \texttt{head},
+\texttt{random\_element}, \texttt{last}, etc. The issue is a subtle bug
+in our implementation. Our contract should express some important
+property about our function. In mode's case, it should relate to the
+count of the value.
+
+One \emph{extremely} useful property is adding bounds. The mode of a
+list is the element that occurs most frequently. Every element of the
+list should occur less often, or as often, as the
+mode\footnote{We have to say ``less than or \textit{equal} to'' for two reasons. First, the mode is not strictly more frequent than other elements, like in \texttt{[1, 1, 2, 2]}. Second, what if the mode \textit{is} \texttt{l[0]}?}.
+One good arbitrary element is the first element:
+
+\begin{minted}{python}
+@ensure("result > arbitrary", 
+  lambda a, r: a.l.count(r) >= a.l.count(a.l[0]))
+\end{minted}
+This finds the bug!
+
+\begin{minted}{python}
+args = ([0, 0, 1],), kwargs = {}, rargs = Args(l=[0, 0, 1])
+result = 1
+E           dpcontracts.PostconditionError: result > arbitrary
+\end{minted}
+Personally, I'd prefer this as a property test clause instead of a
+contract clause. It doesn't feel ``right'' to me. I think it's more an
+aesthetic judgment than a technical one here.
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1))
+def test_mode(l):
+    x = mode(l)
+    assert l.count(x) >= l.count(l[0])
+\end{minted}
+Either way, this is only a partial contract: while it will catch
+\emph{some} incorrect outputs, it won't catch them all. We could get
+this with \texttt{{[}1,\ 0,\ 0,\ 2{]}}:
+\texttt{count(0)\ \textgreater{}\ count(2)\ \textgreater{}=\ count(1)},
+but our broken function would return \texttt{2}. In some cases, this is
+all we can feasibly get. For simpler functions, though, we can rule out
+all incorrect outputs. We want a total contract, one which always raises
+on an incorrect output and never raises on a correct one.
+
+\subsection{The dang definition}\label{the-dang-definition}
+
+Why not just use the definition itself?
+
+\begin{minted}{python}
+@ensure("result is the mode", 
+  lambda a, r: all((a.l.count(r) >= a.l.count(x) for x in a.l)))
+\end{minted}
+To make this nicer we can extract this into a dedicated helper contract:
+
+\begin{minted}{python}
+def is_mode(l, m):
+    return all((l.count(m) >= l.count(x) for x in l))
+
+@ensure("result is the mode", lambda a, r: is_mode(a.l, r))
+\end{minted}
+This also catches the error.
+
+\begin{minted}{python}
+args = ([0, 0, 1],), kwargs = {}, rargs = Args(l=[0, 0, 1])
+result = 1
+\end{minted}
+This is the same faulty input as before. Property-based Testing
+libraries \textbf{shrink} inputs to find the smallest possible error,
+which is \texttt{{[}0,\ 0,\ 1{]}}.
+
+\subsubsection{Compare to an Oracle}\label{compare-to-an-oracle}
+
+If we had another way of getting the answer that we knew was correct, we
+could just compare the two results and see if they're the same. This is
+called using an \textbf{oracle}. Oracles are often a good choice when
+you're trying to refactor a complex function or optimize an expensive
+one. For our purposes, it goes too far.
+
+\begin{minted}{python}
+from collections import Counter
+
+def math_mode(l):
+    c = Counter(l)
+    return c.most_common(1)[0][0]
+
+@require("l must not be empty", lambda args: len(args.l) > 0)
+@ensure("result matches oracle", lambda a, r: r == math_mode(a.l))
+def mode(l):
+  ...
+\end{minted}
+This is too heavy. Not only is it cumbersome, but it overconstrains what
+the mode can be. We see this in the error it finds: it finds an error
+with a smaller input than the other two!
+
+\begin{minted}{python}
+args = ([0, 1],), kwargs = {}, rargs = Args(l=[0, 1]), result = 1
+\end{minted}
+We haven't precisely defined the semantics of \texttt{mode}. If there
+are two values which tie for the most elements, which is the mode? Our
+prior contracts didn't say: as long as we picked an element that had at
+least as many instances as any other element, we were good. With
+\texttt{math\_mode}, we're arbitrarily choosing one of them as the
+``real'' mode and checking that our \texttt{mode} picked that arbitrary
+element. We can see this better by writing a manual test:
+
+\begin{minted}{python}
+def test_mode():
+    mode([3, 2, 2, 3])
+
+...
+
+args = ([3, 2, 2, 3],), kwargs = {}, rargs = Args(l=[3, 2, 2, 3])
+result = 2
+\end{minted}
+Whereas with our previous contract passes on this.
+
+\section{Property-wise}\label{property-wise}
+
+Our contract approach converged on ``testing the definition'' as the
+best result. There are many cases where code-under-test does not have a
+nice mathematical definition. Contracts are still useful here, as they
+can rule out bad cases, but you'll need additional tests.
+
+\emph{Hypothetically} contracts can express all possible properties of a
+function. In practice you're limited to what your framework can express
+and check. For most complicated properties we're better off sticking it
+in a dedicated test.
+
+``Property-wise'' property tests have several advantages over
+``contract-wise'' property tests:
+
+\begin{enumerate}
+
+\item
+  We can test properties that aren't ``ergonomic'' in our contract
+  framework.
+\item
+  We can test properties that involve effects.
+\item
+  We can test
+  \href{https://www.hillelwayne.com/post/metamorphic-testing/}{metamorphic
+  relations} which involve comparing multiple function calls.
+\end{enumerate}
+For this \texttt{mode} problem we don't need any of them, but let's show
+off some possible tactics anyway.
+
+\subsection{Preserving
+Transformation}\label{preserving-transformation}
+
+We find some transformation of the input that should give the same
+output. For lists, a good transformation is
+sorting\footnote{Unless you're trying to test a sorting function.}.
+The mode of a list doesn't change if you sort it:
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1))
+def test_sorting_preserves_mode(l):
+    assert mode(l) == mode(sorted(l))
+
+...
+
+l = [0, 0, -1]
+\end{minted}
+We could also reverse the list instead of sort it, but that gives us an
+error case of \texttt{{[}1,\ -1{]}}, which again is due to
+overconstraints.
+
+Or we could assert that the mode doesn't change if we add it again to
+the list:
+
+\begin{minted}{python}
+def test_can_add_to_mode(l):
+    m = mode(l)
+    assert mode(l + [m]) == m
+\end{minted}
+This does \emph{not} find the bug, though.
+
+\subsection{Controlled
+Transformation}\label{controlled-transformation}
+
+Instead of finding a solution that doesn't change the answer, we could
+find one that changes it in a known way. One of them might be ``doubling
+all of the numbers doubles the mode'':
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1))
+def test_doubling_doubles_mode(l):
+    doubled = [x * 2 for x in l]
+    assert 2*mode(l) == mode(doubled)
+\end{minted}
+This does not find the bug. We could also try ``adding 1 to every
+element adds 1 to the mode'':
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1))
+def test_incrementing_increments_mode(l):
+    incremented = [x + 1 for x in l]
+    assert mode(l)+1 == mode(incremented)
+
+...
+
+l = [0, 1]
+\end{minted}
+
+It gives the same output as in our overconstrained case, but it only
+``is wrong'' when we have \texttt{0}'s anyway. If we restrict the list to only
+positive integers, it will pass (unlike our oracle contract).
+
+If we wanted to be extra thorough we could generatively pick both a
+slope and an increment:
+
+\begin{minted}{python}
+@given(lists(integers(), min_size=1), integers())
+def test_affine_relation(l, m, b):
+    transformed = [m*x+b for x in l]
+    assert  m*mode(l)+b == mode(transformed)
+
+...
+
+l = [0, 1], m = 1, b = 1
+\end{minted}
+It depends on how paranoid you want to get.
+
+\subsection{Oracle Generators}\label{oracle-generators}
+
+The big advantage of manual tests to generative ones is that you can
+come up with the appropriate outputs for a given input. Since we can't
+easily do that in PBT, we're stuck testing properties instead of
+oracles.
+
+Or we could go in reverse: take a random output and generate a
+corresponding input. One way we can do that:
+
+\begin{enumerate}
+
+\item
+  generate pairs of elements and counts. Make sure that the elements are
+  unique
+\item
+  construct a list from that
+\item
+  pass in both the list and the corresponding mode, selected from the
+  pair.
+\end{enumerate}
+
+\begin{minted}{python}
+@composite
+def list_and_mode(draw):
+    out = []
+    pairs_max_10 = tuples(integers(), integers(min_value=1, max_value=10))
+    counts = draw(lists(pairs_max_10, 
+        min_size=1,
+        max_size=5, 
+        unique_by= lambda x: x[0]))
+    for number, count in counts:
+        out += ([number] * count)
+    mode_of_out = max(counts, key=lambda x: x[1])[0]
+    return out, mode_of_out
+
+@given(list_and_mode())
+def test_can_find_mode(lm):
+    l, m = lm
+    assert mode(l) == m
+
+...
+
+lm = ([0, 1], 0)
+\end{minted}
+This overconstrains (we're not ruling out two pairs having the same
+counts), but it \emph{does not} raise a false positive for
+\texttt{{[}3,\ 2,\ 2,\ 3{]}}. This is because we construct the list in
+the same way \texttt{max} interprets the list. If we do
+
+\begin{verbatim}
+-   for number, count in counts:
++   for number, count in reversed(counts):
+\end{verbatim}
+
+Then it raises \texttt{{[}3,\ 2{]}} as a ``counterexample''. Between the
+cumbersomeness and the overconstraining, making an oracle generator is
+not a good choice for this problem. There are some cases, though, where
+it can be more useful.
+
+\section{Limitations}\label{limitations}
+
+Here's a fixed version that \emph{looks} like it will work:
+
+\begin{minted}{python}
+def mode(l):
+  max = None
+  count = {}
+  for x in l:
+    if x not in count:
+      count[x] = 0
+    count[x] += 1
++   if max is None or count[x] > count[max]:
+-   if not max or count[x] > count[max]:
+      max = x
+  return max
+\end{minted}
+And this passes all of our tests. But there's still a bug in it. Again,
+take a minute to see if you can find it. If you can't, try the
+following:
+
+\begin{minted}{python}
+mode([None, None, 2])
+\end{minted}
+This will select the mode as \texttt{2}, when it really should be
+\texttt{None}. The problem isn't in our contracts or assertions. It's in
+our test generator: we're only testing with lists of integers.
+Hypothesis can generate heterogenous lists, but you still have to
+explicitly list the types you want to be in the list. In order to find
+this bug we'd have to explicitly realize that \texttt{None} might be a
+problem for us.
+
+If we only want to call \texttt{mode} on homogenous lists, we should
+instead use a typechecker to catch the bug:
+
+\begin{minted}{python}
++ def mode(l: List[T]) -> T:
+- def mode(l):
+    max = None
++   count = {} # type: Dict[T, int]
+-   count = {}
+\end{minted}
+This will raise a spurious error, saying that the return value is
+actually an \texttt{Optional{[}T{]}}. If we change \texttt{max\ =\ None}
+to \texttt{max\ =\ l{[}0{]}} both the error and the bug go away. But we
+can change the return value to \texttt{Optional{[}T{]}} and the bug
+remains- mypy can't actually detect if we're passing in a heterogenous
+list. More type-oriented languages can ban heterogenous lists outright
+but even those will miss the bugs our contracts caught. Static and
+dynamic analysis are complementary, not
+contradictory\footnote{Both contracts and properties can be checked statically, but \textit{most} people using them will be checking them at runtime. This is because static analysis of contracts quickly turns into formal verification, which is really, really hard. }.
+
+\hypertarget{summary}{%
+\subsection{Summary}\label{summary}}
+
+This was a pretty short dive into what makes a good property or
+contract. It also focused on just pure functions: a lot of languages use
+contracts to maintain class invariants or monitor the side effects of
+procedures.
+
+If you're interested in learning more about properties,
+chapter \ref{sec:choosing_properties_for_testing}
+is a canonical article on abstract properties and chapter \ref{sec:screencast_introduction}
+is a series on applying it to business problems. If you're interested in
+learning more about contracts, I'd recommend\ldots{} actually, I can't
+think of anything that's not language-specific. Kind of surprising given
+how useful they are.
+
+

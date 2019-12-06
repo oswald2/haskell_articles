@@ -12,4 +12,6 @@ The source uses the LaTeX package minted for syntax highlighting. This package n
 pdflatex -shell-escape HaskellArticles.tex
 ```
 
+There is also a bibilography contained, so you need to run BibTex as well and pdflatex several times to get the cross references right. 
+
 

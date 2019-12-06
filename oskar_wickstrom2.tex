@@ -24,7 +24,8 @@ extracted as a standalone piece. Since I'm not expecting to finish the
 PBT book any time soon, I decided to publish the chapter here.
 
 \section{System Under Test: User Signup
-Validation}\label{system-under-test-user-signup-validation}
+Validation}
+\label{system-under-test-user-signup-validation}
 
 The business logic we'll test is the validation of a website's user
 signup form. The website requires users to sign up before using the
@@ -81,7 +82,8 @@ data SignupError
 
 
 
-\subsection{The Validation Type}\label{the-validation-type}
+\subsection{The Validation Type}
+\label{the-validation-type}
 
 The \texttt{Validation} type comes from the
 \href{https://hackage.haskell.org/package/validation}{validation}
@@ -106,7 +108,8 @@ Using a non-empty list for failures in the \texttt{Validation} type is
 common practice. It means that if the validation fails, there's at least
 one error value.
 
-\section{Validation Property Tests}\label{validation-property-tests}
+\section{Validation Property Tests}
+\label{validation-property-tests}
 
 Let's add some property tests for the form validation, and explore the
 existing implementation. We begin in a new test module, and we'll need a
@@ -128,7 +131,8 @@ import Validation
 We're now ready to define some property tests.
 
 \subsection{A Positive Property
-Test}\label{a-positive-property-test}
+Test}
+\label{a-positive-property-test}
 
 The first property test we'll add is a \emph{positive} test. That is, a
 test using only valid input data. This way, we know the form validation
@@ -191,7 +195,8 @@ Let's run some tests:
 
 \noindent Hooray, it works.
 
-\subsection{Negative Property Tests}\label{negative-property-tests}
+\subsection{Negative Property Tests}
+\label{negative-property-tests}
 
 In addition to the positive test, we'll add \emph{negative} tests for
 the name and age, respectively. Opposite to positive tests, our negative
@@ -259,7 +264,8 @@ All good? Maybe not. The astute reader might have noticed a problem with
 one of our generators. We'll get back to that later.
 
 \subsection{Accumulating All
-Failures}\label{accumulating-all-failures}
+Failures}
+\label{accumulating-all-failures}
 
 When validating the form data, we want \emph{all} failures returned to
 the user posting the form, rather than returning only one at a time. The
@@ -306,7 +312,8 @@ We're still not being specific about which failures should be returned.
 But unlike \texttt{prop\_two\_failures\_\-are\_\-returned}, this property at
 least makes sure there are no duplicate failures.
 
-\section{The Value of a Property}\label{the-value-of-a-property}
+\section{The Value of a Property}
+\label{the-value-of-a-property}
 
 Is there a faulty behaviour that would slip past
 \texttt{prop\_two\_different\_failures\_are\_returned}? Sure. The
@@ -341,7 +348,8 @@ your properties over time.
 Coming up with good properties is a skill. Practice, and you'll get
 better at it.
 
-\section{Testing Generators}\label{testing-generators}
+\section{Testing Generators}
+\label{testing-generators}
 
 Remember how in section 
 \ref{negative-property-tests} we noted that there's a problem? The issue is, we're not
@@ -386,7 +394,8 @@ We can even have Hedgehog fail the test unless a certain percentage is
 met. This way, we can declare mininum coverage requirements for the
 generators used in our property tests.
 
-\subsection{Adding Coverage Checks}\label{adding-coverage-checks}
+\subsection{Adding Coverage Checks}
+\label{adding-coverage-checks}
 
 Let's check that we generate values covering enough cases, based on the
 validation rules in eq.~1 . In \texttt{prop\_invalid\_age\_fails}, we
@@ -469,7 +478,8 @@ making it practical to debug generators. It ensures our tests meet our
 coverage requirements, even as implementation and tests evolve over
 time.
 
-\section{From Ages to Birth Dates}\label{from-ages-to-birth-dates}
+\section{From Ages to Birth Dates}
+\label{from-ages-to-birth-dates}
 
 So far, our efforts have been successful. We've fixed real issues in
 both implementation and tests. Management is pleased. They're now asking
@@ -524,7 +534,8 @@ we're faced with an important question. How should the validation
 function obtain \emph{today's date}?
 
 \subsection{Keeping Things
-Deterministic}\label{keeping-things-deterministic}
+Deterministic}
+\label{keeping-things-deterministic}
 
 We could make \texttt{validateSignup} a non-deterministic action, which
 in Haskell would have the following type signature:
@@ -559,7 +570,8 @@ validateSignup
 Again, let's not worry about the implementation just yet. We'll focus on
 the tests.
 
-\subsection{Generating Dates}\label{generating-dates}
+\subsection{Generating Dates}
+\label{generating-dates}
 
 In order to test the new \texttt{validateSignup} implementation, we need
 to generate \texttt{Day} values. We're going to use a few functions from
@@ -607,7 +619,8 @@ is arbitrary. We could pick any centuries we like, provided the
 realistic?
 
 \subsection{Rewriting Existing
-Properties}\label{rewriting-existing-properties}
+Properties}
+\label{rewriting-existing-properties}
 
 Now, it's time to rewrite our existing property tests. Let's begin with
 the one testing that validating a form with all valid data succeeds:
@@ -713,7 +726,8 @@ for valid and invalid ages, we'll use a \emph{single} property for all
 cases. This way, we only need a single generator.
 
 \section{A Single Validation
-Property}\label{a-single-validation-property}
+Property}
+\label{a-single-validation-property}
 
 In \href{https://www.youtube.com/watch?v=NcJOiQlzlXQ}{Building on
 developers' intuitions to create effective property-based tests}, John
@@ -756,8 +770,6 @@ prop_validates_age = property $ do
 There are a few new things going on here:
 
 \begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-
 \item
   Instead of generating exclusively invalid or valid birth dates, we're
   now generating \emph{any} birth date based on today's date
@@ -818,7 +830,8 @@ on a single generator. It's now easier to generate values close to the
 valid/invalid boundary of our SUT, i.e.~around 18 years from today's
 date.
 
-\section{February 29th}\label{february-29th}
+\section{February 29th}
+\label{february-29th}
 
 For the fun of it, let's run some more tests. We'll crank it up to
 20000 (see figure \ref{fig:hedgehog6}
@@ -851,7 +864,8 @@ This means that when the validation runs on a leap day,
 1st), the validation function incorrectly considers the person old
 enough. We've found a bug.
 
-\subsection{Test Count and Coverage}\label{test-count-and-coverage}
+\subsection{Test Count and Coverage}
+\label{test-count-and-coverage}
 
 Two things led us to find this bug:
 
@@ -892,7 +906,8 @@ In the case of our leap day bug, we can catch it with fewer tests, and
 on every test run. We need to make sure we cover leap days, used both as
 today's date and as the birth date, even with a low number of tests.
 
-\subsection{Covering Leap Days}\label{covering-leap-days}
+\subsection{Covering Leap Days}
+\label{covering-leap-days}
 
 To generate inputs that cover certain edge cases, we combine specific
 generators using \texttt{Gen.frequency}:
@@ -1093,7 +1108,8 @@ coverage requirements are met.
  \label{fig:hedgehog7}
 \end{figure}
 
-\section{Summary}\label{summary}
+\section{Summary}
+\label{summary}
 
 In this tutorial, we started with a simple form validation function,
 checking the name and age of a person signing up for an online service.

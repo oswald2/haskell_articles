@@ -29,7 +29,8 @@ hacks that static object-oriented languages sometimes use for mocking,
 such as dynamic bytecode generation.
 
 \section{First, an aside on testing
-philosophy}\label{first-an-aside-on-testing-philosophy}
+philosophy}
+\label{first-an-aside-on-testing-philosophy}
 
 Testing methodology is a controversial topic within the larger
 programming community, and there are a multitude of different
@@ -56,7 +57,8 @@ With that disclaimer out of the way, let's talk about testing in
 Haskell.
 
 \hypertarget{drawing-seams-using-types}{%
-\section{Drawing seams using types}\label{drawing-seams-using-types}}
+\section{Drawing seams using types}
+\label{drawing-seams-using-types}}
 
 One of the primary attributes of unit tests in object-oriented
 languages, especially statically-typed ones, is the concept of ``seams''
@@ -137,7 +139,8 @@ it provides additional type safety guarantees without the need to
 explicitly modify the code to support some kind of dependency injection.
 
 \subsection{Making implicit interfaces
-explicit}\label{making-implicit-interfaces-explicit}
+explicit}
+\label{making-implicit-interfaces-explicit}
 
 Statically typed, object-oriented languages provide interfaces as a
 language construct to encode certain kinds of contracts into the type
@@ -212,7 +215,8 @@ Of course, this blog post is about testing, so we're going to go further
 and take advantage of these seams we've now drawn. The question is: how?
 
 \section{Testing with typeclasses: an initial
-attempt}\label{testing-with-typeclasses-an-initial-attempt}
+attempt}
+\label{testing-with-typeclasses-an-initial-attempt}
 
 Given that we now have functions depending on an interface instead of
 \texttt{IO}, we can create separate instances of our typeclasses for use
@@ -264,7 +268,8 @@ This all seems to be successful, so let's try and apply the same testing
 technique to \texttt{reverseFile}.
 
 \subsection{Testing side-effectful
-code}\label{testing-side-effectful-code}
+code}
+\label{testing-side-effectful-code}
 
 Looking at the type signature for \texttt{reverseFile}, we have a small
 problem:
@@ -382,7 +387,8 @@ dictionaries, which will allow us to dramatically simplify the above
 testing mechanism.
 
 \section{Creating first-class typeclass
-instances}\label{creating-first-class-typeclass-instances}
+instances}
+\label{creating-first-class-typeclass-instances}
 
 In order to provide an easy way to construct instances, we need a way to
 represent instances as ordinary Haskell values. This is not terribly
@@ -430,7 +436,8 @@ around explicitly, and the instance can defer to the dictionary's
 implementation.
 
 \subsection{Creating an instance
-proxy}\label{creating-an-instance-proxy}
+proxy}
+\label{creating-an-instance-proxy}
 
 To represent our proxy type, we'll use a combination of a
 \texttt{Writer} and a \texttt{ReaderT}; the former to implement the
@@ -628,7 +635,8 @@ mind, we can do even better: we can use Template Haskell.
 
 \hypertarget{removing-the-boilerplate-using-test-fixture}{%
 \section{\texorpdfstring{Removing the boilerplate using
-\texttt{test-fixture}}{Removing the boilerplate using test-fixture}}\label{removing-the-boilerplate-using-test-fixture}}
+\texttt{test-fixture}}{Removing the boilerplate using test-fixture}}
+\label{removing-the-boilerplate-using-test-fixture}}
 
 The above code was not only rather boilerplate-heavy, it was pretty
 complicated. Fortunately, you don't actually have to write it. Enter the
@@ -685,7 +693,8 @@ you're interested, I would highly recommend you take a look at the
 documentation on Hackage}.
 
 \section{Conclusion, credits, and similar
-techniques}\label{conclusion-credits-and-similar-techniques}
+techniques}
+\label{conclusion-credits-and-similar-techniques}
 
 This blog post came about as the result of a need my coworkers and I
 found when writing Haskell code; we wanted a way to write unit tests

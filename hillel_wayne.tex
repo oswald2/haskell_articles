@@ -79,7 +79,8 @@ def mode(l):
   ...
 \end{minted}
 
-\section{Contract-wise}\label{contract-wise}
+\section{Contract-wise}
+\label{contract-wise}
 
 One property of a function is ``all of the contracts are satisfied''. We
 can use this to write ``thin'' tests, where we don't put any assertions
@@ -92,7 +93,8 @@ def test_mode(l):
     mode(l)
 \end{minted}
 
-\subsection{Types}\label{types}
+\subsection{Types}
+\label{types}
 
 Typically in dynamic programming languages, contracts are used as a poor
 replacement of a static type system. Instead of checking the type at
@@ -116,7 +118,8 @@ This is a bad contract for three reasons:
   that we got the wrong result.
 \end{enumerate}
 
-\subsubsection{Sanity Checking}\label{sanity-checking}
+\subsubsection{Sanity Checking}
+\label{sanity-checking}
 
 We can go further than replicating static types. One common type of
 contract is a ``sanity check'': some property that does not fully
@@ -132,7 +135,8 @@ function, and it's not easily replacable with a typecheck. If I was
 writing production code I'd probably write a lot of contracts like this.
 But it also doesn't find the problem, so we need to go further.
 
-\subsection{First element}\label{first-element}
+\subsection{First element}
+\label{first-element}
 
 Our sanity check was only minimally related to our function. There are
 lots of functions that return elements in the list: \texttt{head},
@@ -177,7 +181,8 @@ all we can feasibly get. For simpler functions, though, we can rule out
 all incorrect outputs. We want a total contract, one which always raises
 on an incorrect output and never raises on a correct one.
 
-\subsection{The dang definition}\label{the-dang-definition}
+\subsection{The dang definition}
+\label{the-dang-definition}
 
 Why not just use the definition itself?
 
@@ -203,7 +208,8 @@ This is the same faulty input as before. Property-based Testing
 libraries \textbf{shrink} inputs to find the smallest possible error,
 which is \texttt{{[}0,\ 0,\ 1{]}}.
 
-\subsubsection{Compare to an Oracle}\label{compare-to-an-oracle}
+\subsubsection{Compare to an Oracle}
+\label{compare-to-an-oracle}
 
 If we had another way of getting the answer that we knew was correct, we
 could just compare the two results and see if they're the same. This is
@@ -249,7 +255,8 @@ result = 2
 \end{minted}
 Whereas with our previous contract passes on this.
 
-\section{Property-wise}\label{property-wise}
+\section{Property-wise}
+\label{property-wise}
 
 Our contract approach converged on ``testing the definition'' as the
 best result. There are many cases where code-under-test does not have a
@@ -280,7 +287,8 @@ For this \texttt{mode} problem we don't need any of them, but let's show
 off some possible tactics anyway.
 
 \subsection{Preserving
-Transformation}\label{preserving-transformation}
+Transformation}
+\label{preserving-transformation}
 
 We find some transformation of the input that should give the same
 output. For lists, a good transformation is
@@ -311,7 +319,8 @@ def test_can_add_to_mode(l):
 This does \emph{not} find the bug, though.
 
 \subsection{Controlled
-Transformation}\label{controlled-transformation}
+Transformation}
+\label{controlled-transformation}
 
 Instead of finding a solution that doesn't change the answer, we could
 find one that changes it in a known way. One of them might be ``doubling
@@ -356,7 +365,8 @@ l = [0, 1], m = 1, b = 1
 \end{minted}
 It depends on how paranoid you want to get.
 
-\subsection{Oracle Generators}\label{oracle-generators}
+\subsection{Oracle Generators}
+\label{oracle-generators}
 
 The big advantage of manual tests to generative ones is that you can
 come up with the appropriate outputs for a given input. Since we can't
@@ -416,7 +426,8 @@ cumbersomeness and the overconstraining, making an oracle generator is
 not a good choice for this problem. There are some cases, though, where
 it can be more useful.
 
-\section{Limitations}\label{limitations}
+\section{Limitations}
+\label{limitations}
 
 Here's a fixed version that \emph{looks} like it will work:
 
@@ -468,8 +479,7 @@ but even those will miss the bugs our contracts caught. Static and
 dynamic analysis are complementary, not
 contradictory\footnote{Both contracts and properties can be checked statically, but \textit{most} people using them will be checking them at runtime. This is because static analysis of contracts quickly turns into formal verification, which is really, really hard. }.
 
-\hypertarget{summary}{%
-\subsection{Summary}\label{summary}}
+\subsection{Summary}
 
 This was a pretty short dive into what makes a good property or
 contract. It also focused on just pure functions: a lot of languages use

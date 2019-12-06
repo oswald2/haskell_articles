@@ -310,7 +310,8 @@ You might argue that we are only testing sorting for lists of integers. But the 
 
 
 \subsubsection{Applying ``different paths, same destination'' to a list
-reversal function}\label{applying-different-paths-same-destination-to-a-list-reversal-function}
+reversal function}
+\label{applying-different-paths-same-destination-to-a-list-reversal-function}
 
 Ok, enough of \texttt{List.sort}. What about applying the same ideas to
 the list reversal function?
@@ -369,7 +370,8 @@ using lists of bools to start with.
 Here's an exercise for you: Is this property good enough? Is there some
 way that the EDFH can create an implementation that will pass?
 
-\section{``There and back again''}\label{there-and-back-again2}
+\section{``There and back again''}
+\label{there-and-back-again2}
 
 Sometimes the multi-path style properties are not available or too
 complicated, so let's look at some other approaches.
@@ -413,7 +415,8 @@ does indeed ``undo'' the primary function (such as serialization).
 We'll see some real examples of using this in the next post.
 
 \section{``Hard to prove, easy to
-verify''}\label{hard-to-prove-easy-to-verify2}
+verify''}
+\label{hard-to-prove-easy-to-verify2}
 
 So far we've been testing properties without actually caring about the
 end result of an operation. 
@@ -489,7 +492,8 @@ Check.Quick ``concatting the elements of a string split by commas recreates
 \end{minted}
 
 \subsubsection{``Hard to prove, easy to verify'' for list
-sorting}\label{hard-to-prove-easy-to-verify-for-list-sorting}
+sorting}
+\label{hard-to-prove-easy-to-verify-for-list-sorting}
 
 So how can we apply this principle to a sorted list? What property is
 easy to verify?
@@ -586,7 +590,8 @@ As it happens, we'll fix this particular problem by using the next
 principle!
 
 \section{``Some things never
-change''}\label{some-things-never-change2}
+change''}
+\label{some-things-never-change2}
 
 A useful kind of property is based on an invariant that is preserved
 after some transformation, such as preserving length or contents.
@@ -655,7 +660,8 @@ Check.Quick (``adjacent pairs from a list should be ordered`` badSort2)
 
 
 \subsection{Sort invariant - 2nd
-attempt}\label{sort-invariant---2nd-attempt}
+attempt}
+\label{sort-invariant---2nd-attempt}
 
 So now we have to try again. What is the difference between the real
 result \texttt{{[}1;2;3{]}} and the fake result \texttt{{[}1;1;1{]}}?
@@ -779,7 +785,8 @@ testing easier. In other words, property-based testing influenced the
 design of the code, just as TDD would.
 
 \subsection{Sort invariant - 3rd
-attempt}\label{sort-invariant---3rd-attempt}
+attempt}
+\label{sort-invariant---3rd-attempt}
 
 Ok, so we can't use permutations by just looping through them. So let's
 use the same idea but write a function that is specific for this case, a
@@ -854,7 +861,8 @@ In fact, these two properties,
 should indeed ensure that any implementation is correct.
 
 \section{Sidebar: Combining
-properties}\label{sidebar-combining-properties}
+properties}
+\label{sidebar-combining-properties}
 
 Just above, we noted that there were \emph{two} properties needed to
 define the ``is sorted'' property. It would be nice if we could combine
@@ -932,7 +940,8 @@ the FsCheck documentation under ``And, Or and Labels''}.
 And now, back to the property-divising strategies.
 
 \section{``Solving a smaller
-problem''}\label{solving-a-smaller-problem2}
+problem''}
+\label{solving-a-smaller-problem2}
 
 Sometimes you have a recursive data structure or a recursive problem. In
 these cases, you can often find a property that is true of a smaller
@@ -998,7 +1007,8 @@ recursive properties. They are pretty obvious and low hanging, when you
 get the hang of it.
 
 \section{Is the EDFH really a
-problem?}\label{is-the-edfh-really-a-problem}
+problem?}
+\label{is-the-edfh-really-a-problem}
 
 In the last few examples, I've noted that trivial but wrong
 implementations often satisfy the properties as well as good
@@ -1017,7 +1027,8 @@ overlooked -- something that, when you discover it, will make your
 design both clearer and more robust.
 
 \section{``The more things change, the more they stay the
-same''}\label{the-more-things-change-the-more-they-stay-the-same2}
+same''}
+\label{the-more-things-change-the-more-they-stay-the-same2}
 
 Our next type of property is ``idempotence''. Idempotence simply means
 that doing something twice is the same as doing it once. If I tell you
@@ -1134,7 +1145,8 @@ If you need tips on how to do this, searching for
 patterns} will turn up some good results.
 
 \section{``Two heads are better than
-one''}\label{two-heads-are-better-than-one2}
+one''}
+\label{two-heads-are-better-than-one2}
 
 And finally, last but not least, we come to the ``test oracle''. A test
 oracle is simply an alternative implementation that gives the right
@@ -1197,7 +1209,8 @@ Check.Quick (``sort should give same result as insertion sort`` badSort)
 
 
 \section{Generating Roman numerals in two different
-ways}\label{generating-roman-numerals-in-two-different-ways}
+ways}
+\label{generating-roman-numerals-in-two-different-ways}
 
 We can also use the test oracle approach to cross-check two different
 implementations when you're not sure that \emph{either} implementation
@@ -1308,7 +1321,8 @@ Check.Quick ``for all values of arabicNumber biquinary should give same
 \end{minted}
 And we're good! Both algorithms work correctly, it seems.
 
-\section{``Model-based'' testing}\label{model-based-testing2}
+\section{``Model-based'' testing}
+\label{model-based-testing2}
 
 ``Model-based'' testing, which we will discuss in more detail in a later
 post, is a variant on having a test oracle.
@@ -1321,7 +1335,8 @@ under test. If they are the same, you're done. If not, either your SUT
 is buggy or your model is wrong and you have to start over!
 
 \section{Interlude: A game based on finding
-properties}\label{interlude-a-game-based-on-finding-properties}
+properties}
+\label{interlude-a-game-based-on-finding-properties}
 
 With that, we have come to the end of the various property categories.
 We'll go over them one more time in a minute -- but first, an interlude.
@@ -1359,7 +1374,8 @@ If you want to learn more about Zendo,
 \href{http://www.looneylabs.com/rules/zendo}{the rules are here}.
 
 \section{Applying the categories one more
-time}\label{applying-the-categories-one-more-time}
+time}
+\label{applying-the-categories-one-more-time}
 
 With all these categories in hand, let's look at one more example
 problem, and see if we can find properties for it.
@@ -1470,7 +1486,8 @@ really were designing a complex currency management system, it might be
 very useful to cross-check our results with a third party system.
 
 \subsection{Properties for an immutable
-Dollar}\label{properties-for-an-immutable-dollar}
+Dollar}
+\label{properties-for-an-immutable-dollar}
 
 A confession! I cheated a bit in the code above and created a mutable
 class, which is how most OO objects are designed.
@@ -1553,7 +1570,8 @@ You can do that if you like -- I'm going to switch to F\# record types
 and get equality for free!
 
 \subsection{Dollar properties -- version
-3}\label{dollar-properties-version-3}
+3}
+\label{dollar-properties-version-3}
 
 Here's the \texttt{Dollar} rewritten again:
 
@@ -1627,7 +1645,8 @@ So this ``different paths, same result'' approach is very fruitful, and
 we can generate \emph{lots} of paths this way.
 
 \subsection{Dollar properties -- version
-4}\label{dollar-properties-version-4}
+4}
+\label{dollar-properties-version-4}
 
 Shall we call it done then? I would say not! 
 We are beginning to get a whiff of a code smell. All this
@@ -1693,7 +1712,8 @@ Our new ``map'' property is much more general than the original property
 using ``times'', so we can eliminate the latter safely.
 
 \subsection{Logging the function
-parameter}\label{logging-the-function-parameter}
+parameter}
+\label{logging-the-function-parameter}
 
 There's a little problem with the property as it stands. If you want to
 see what the function is that FsCheck is generating, then Verbose mode
@@ -1766,7 +1786,8 @@ was used for that iteration.
 
 
 \section{TDD vs.~property-based
-testing}\label{tdd-vs.property-based-testing}
+testing}
+\label{tdd-vs.property-based-testing}
 
 How does property-based testing (PBT) fit in with TDD? This is a common
 question, so let me quickly give you my take on it.
@@ -1822,7 +1843,8 @@ correct programs, and both are really more about design than coding
 (think ``Test-driven \emph{design}'' rather than ``Test-driven
 \emph{development}'').
 
-\section{The end, at last}\label{the-end-at-last}
+\section{The end, at last}
+\label{the-end-at-last}
 
 So that brings us to the end of another long post on property-based
 testing! 

@@ -1,0 +1,295 @@
+\chapter{Metamorphic Testing - Hillel Wayne}
+
+
+\begin{quotation}
+\noindent\textit{\textbf{William Yao:}}
+\textit{Another more general PBT post. The motivating problem: vanilla PBT assumes it's easy to generate inputs to our code. Sometimes it's not. For instance, what if you're testing an image classifier neural net? You can't randomly generate images, because you don't know what the output classification should be for a random image. So we might only have a small set of manually-classified test inputs. Metamorphic testing is a way of expanding our set of test inputs programmatically by transforming the inputs we do have in some way and finding relationships between the original result and the transformed result. For instance, if we invert the color of one of our test images, our classifier should probably give us the same result. If you make a property out of that, you now have more test cases for free, and that catches more bugs.}
+
+\vspace{\baselineskip}
+\noindent\textit{Original article: \cite{metamorphic_testing}}
+\end{quotation}
+
+
+
+\noindent Confession: I read the \href{https://queue.acm.org/}{ACM Magazine}. This
+makes me a dweeb even in programming circles. One of the things I found
+in it is ``Metamorphic Testing''. I've never heard of it, and nobody I
+knew heard about it either. But the academic literature was shockingly
+impressive: many incredibly successful case studies in wildly different
+fields. So why haven't we heard of it before? There's only
+\href{https://medium.com/trustableai/testing-ai-with-metamorphic-testing-61d690001f5c}{one}
+article anywhere targeted at people outside academia. Let's make it two.
+
+\section{Background}\label{background}
+
+Most written tests use \textbf{oracles}. That's where you know the
+answer and are explicitly checking that the computation gives you the
+answer.
+
+\begin{minted}{python}
+def test_dist():
+    p1 = (0, 3)
+    p2 = (4, 0)
+    assert dist(p1, p2) == 5
+\end{minted}
+In addition to being an oracle test, it's also a manual test. Somebody
+sat down and decided specific inputs and specific outputs. As systems
+get more complex, bespoke manual tests become less and less useful. Each
+one only hits a single point in a larger state space, and we want
+something that covers the state space.
+
+This gives us \textbf{generative testing}: writing tests that hit a
+random set of the statespace. The most popular style of generative
+testing is \textbf{property based testing}, or PBT. We find a
+``property'' of the function and then generate inputs and see if the
+outputs match that property.
+
+\begin{minted}{python}
+def test_dist():
+    p1 = random_point()
+    p2 = random_point()
+    assert dist(p1, p2) >= 0
+\end{minted}
+The advantage of PBT is that it gives more coverage. The downside is
+that we've lost specificity. This is \emph{not} an oracle test anymore!
+We don't know what the answer should be, and the function might be
+broken in a way that has the same property. We rely on heuristics here.
+
+One big problem with PBT is finding good properties. Most functions have
+simple, general properties and complex, specific properties.
+General properties (see chapter \ref{sec:choosing_properties_for_testing})
+can be applied to a wider variety of functions but don't
+give us much information. More specific properties give more
+information, but are harder to find and only apply to specific problem
+domains. If you had a function that determined whether or not a graph is
+acyclic, what property tests would you write? Would they give you
+confidence your function is right?
+
+\section{Motivation}\label{motivation}
+
+Now take a more complex problem. Imagine we're trying to write an
+English speech-to-text (STT) processor. It takes a sound file and
+outputs the text. How would you test it?
+
+The simplest way is with a manual oracle. Read out a sentence and
+confirm it gives you that sentence. But this isn't nearly enough! The
+range of human speech is \emph{enormous}. It'd be better if we could
+instead test 1,000 or 10,000 different sound files. Manually
+transcribing oracles is going to be way too expensive. This means we
+have to use property-based testing instead.
+
+But how do we generate the inputs? One way would be to create random
+strings, then run them through a text-to-speech processor (TTS), and
+then check our STT gives the same text. But, once again, this gives us a
+very limited range of human speech. Will our TTS give us changes in
+tone, slurred words, strong accents? If we don't handle those, is our
+STT actually that useful? We're better off sweeping for ``wild'' text,
+such as from radio, podcasts, online videos.
+
+Now we have a new problem. Using a TTS meant we started with the
+transcription. We don't have that with ``wild'' text, and we still don't
+want to transcribe it ourselves. We're restricted to using properties
+instead. So what properties should we test? Some simple ones might be
+``it doesn't crash on any input'' (good) or ``It doesn't turn acoustic
+music into words'' (maybe?). These properties don't really cover the
+``intent'' of the program, and don't increase confidence all that much.
+
+So we have two problems. One, we need a wide variety of speech inputs.
+Two, we need a way to know make them into useful tests without spending
+hours manually transcribing the speech into oracles.
+
+\section{Metamorphic Testing}\label{metamorphic-testing}
+
+That all treats the output in isolation. What if we embed it in a
+broader context? For example, if a given soundclip transcibes to output
+\texttt{out}, then we should \emph{still} get output \texttt{out} if we:
+
+\begin{itemize}
+\item
+  Double the volume, or
+\item
+  Raise the pitch, or
+\item
+  Increase the tempo, or
+\item
+  Add some background static, or
+\item
+  Add some traffic noises, or
+\item
+  Do any combination of the above.
+\end{itemize}
+All of these are ``straightforward'' transformations we can easily test.
+For example, for the ``traffic noises'' test, we can take 10 traffic
+samples, overlay them on a soundclip, and see that all 11 versions
+match. We can double or half the volume to turn 11 versions into 33
+versions, and double the tempo to get 66 versions. Then we can then
+scale this up to every soundclip in our database, which helps augment
+the space of our inputs.
+
+Having 66 versions to compare is useful enough. However, there's
+something else here: we don't need to know what the output is. If all 66
+transformations return \texttt{out}, the test passes, and if any return
+something different, the test fails. At no point do we need to check
+what \texttt{out} is. This is really, really big. It dramatically
+increases the range we can test with very little human effort. We could,
+for example, download an episode of \emph{This American Life}, run the
+transformations, and see if they all
+match\footnote{Okay, there's obvious problems here,
+  because the podcast might have music, samples in other languages, etc.
+  But the theory is sound: given we have a way of acquiring speech
+  samples, we can use it as part of tests without having to manually
+  label it first.}.
+We have useful tests \emph{without listening to the voice clip.} We can
+now generate complex, deep tests without the use of an oracle!
+
+The two inputs, along with their outputs, are all connected to each
+other. This kind of property spanning multiple inputs/outputs is called
+a \textbf{metamorphic
+relation}\footnote{The corresponding idea in
+  specifications is \textbf{hyperproperties}, properties on sets of
+  behaviors instead of individual behaviors. Most HP research is
+  concerned with security hyperproperties. As I understand it HPs are a
+  superset of MRs.}.
+Testing that leverages this is called \textbf{metamorphic testing}. For
+complex systems, it can be easier to find interesting metamorphic
+relations than interesting single input/output properties.
+
+To be a bit more formal: if we have \texttt{x} and \texttt{f(x)}, we can
+make some transformation on \texttt{x} to get \texttt{x2} and
+\texttt{f(x2)}. In the STT case, we just checked
+\texttt{f(x)\ =\ f(x2)}, but we can use whatever relations we want
+between the two. You could also have MRs like
+\texttt{f(x2)\ \textgreater{}\ f(x)} or ``\texttt{f(x2)/f(x)} is an
+integer''. Similarly, we can also span more than two inputs, using
+\texttt{f(x)} and \texttt{f(x3)}. One example of this might be comparing
+search engine results with no filters to engine results with one filter
+and two filters. Most of the case studies I read only use two inputs,
+because even that is enough to find crazy bugs.
+
+\section{The Case Studies}\label{the-case-studies}
+
+Speaking of case studies: How effective is MT in practice? It's one
+thing to talk about a technique in abstract, or provide toy examples.
+Reading case studies is useful for three reasons. First, it shows
+whether or not this actually works. Next, it shares some potential
+gotchas if we try to use MT. Finally, it gives us ideas on \emph{how} we
+can use it. Any MR a case study uses is something we might be able to
+adapt for our own purposes.
+
+\href{http://www.cs.hku.hk/research/techreps/document/TR-2017-04.pdf}{``Metamorphic
+Testing: A Review of Challenges and Opportunities''} lists a lot of
+studies, but they're all academic papers. Here are a few of the most
+interesting ones. Articles marked \texttt{(pdf)} are, unsurprisingly,
+PDFs.
+
+\begin{mldescription}
+\mlitem{\href{https://arxiv.org/abs/1807.10453}{METTLE: A Metamorphic
+Testing Approach To Validating Unsupervised Machine
+Learning Methods}
+(pdf)}
+Defines 11 different MRs for testing unsupervised clustering, like ``do
+we get the same result if we shuffle the inputs?'' and ``do additional
+inputs at cluster boundaries belong to those clusters?'' Different
+models changed under dfferent relations. For example, about 5\% of
+tested k-means models had a mean clustering error of 20\% under
+shuffling the order of input points
+
+\mlitem{\href{https://arxiv.org/abs/1708.08559}{DeepTest: Automated
+Testing of Deep-Neural-Network-driven Autonomous Cars} (pdf)}
+Subject was car vision systems, MRs were things like ``adding a rain
+filter'' or ``slightly tilting the image''. Authors put sample results
+\href{https://deeplearningtest.github.io/deepTest/}{here}: Pretty much
+all the systems they tested collapsed under the MR changes.
+
+\mlitem{\href{http://multicore.doc.ic.ac.uk/publications/oopsla-17.html}{Automated
+Testing of Graphics Shader Compilers} (pdf)}
+Injecting dead code and runtime-constants into shaders made things in
+pictures disappear or turn to noise. The researchers made a startup
+called
+\href{https://web.archive.org/web/20180710214938/http://www.graphicsfuzz.com/}{GraphicsFuzz}
+off their work, which was acquired by Google and the site taken down.
+
+\mlitem{\href{http://www.lsi.us.es/~segura/files/papers/segura17-tse.pdf}{Metamorphic
+Testing of RESTful Web APIs} (pdf)}
+Do you get the same items when you change the
+\href{https://github.com/spotify/web-api/issues/225}{pagination}? What
+if you order them by date? A whole bunch of errors in Spotify and
+Youtube in this paper.
+
+
+\item{\href{https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-10-24}{An
+innovative approach for testing bioinformatics programs using
+metamorphic testing} (pdf, but now not)}
+Finding mistakes in bioinformatics stuff? Look I barely understand
+bioinformatics, but it's demonstrating how MR is useful in specialist
+domains.
+\end{mldescription}
+
+
+\hypertarget{the-problem}{%
+\subsection{The Problem}\label{the-problem}}
+
+Huh, they're all PDFs.
+
+Finding all of those took several hours. And that ties into the biggest
+drag on MT adoption: All of the above are \textbf{preprints}, or first
+drafts of eventual academic papers. When I dig into obscure techniques,
+I always ask ``why is it obscure?'' Sometimes there's an obvious reason,
+sometimes it's a complex set of subtle reasons, sometimes it's just bad
+luck.
+
+In the case of MT the problem is obvious. \textbf{Almost all of the info
+is behind academic paywalls.} If you want to learn about MT, you either
+need journal access or spend hours hunting down
+preprints\footnote{I had a second, refuted hypothesis:
+  since a lot of the major researchers are from China and Hong Kong,
+  maybe the technique was more well-known in Mandarin-language
+  programming communities than English-language ones.
+  \href{https://twitter.com/sindarknave}{Brian Ng} was kind enough to
+  check for me and didn't find significant use.}.
+
+\hypertarget{learning-more}{%
+\subsection{Learning More}\label{learning-more}}
+
+The inventor of MT is
+\href{https://www.swinburne.edu.au/science-engineering-technology/staff/profile/index.php?id=tychen}{TY
+Chen}. He's also the driver of a lot of the research. Other names are
+\href{https://www.uow.edu.au/~zhiquan/}{Zhi Quan Zhou} and
+\href{http://personal.us.es/sergiosegura/publications/}{Sergio Segura},
+both of whom have put all of their preprints online. Most of the
+research is by one of those.
+
+The best starting resource are probably
+\href{http://www.cs.hku.hk/research/techreps/document/TR-2017-04.pdf}{Metamorphic
+Testing: A Review of Challenges and Opportunities} and
+\href{http://www.lsi.us.es/~segura/files/papers/segura16-tse.pdf}{A
+Survey on Metamorphic Testing}. While this article was about Metamorphic
+\emph{Testing}, researchers have also been applying Metamorphic
+Relationships in general to a wide variety of other disciplines, such as
+formal verification and debugging. I have not researched those other
+uses in depth, but they're probs also worth looking into.
+
+In terms of application, it should be theoretically possible to adapt
+most PBT libraries to check metamorphic properties. In fact the first
+example in the
+\href{https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf}{Quickcheck}
+tests a MR, and
+\href{https://hypothesis.works/articles/testing-optimizers-with-hypothesis/}{this}
+essay on PBT implicitly uses an MR. \emph{In general} it seems to me
+that most PBT research focuses on how we effectively generate and shrink
+inputs, while MT research is more focused on determining what we
+actually want to test. As such they are probably complementary
+techniques.
+
+\emph{Thanks to \href{https://twitter.com/sindarknave}{Brian Ng} for
+help researching this.}
+
+\subsection{PS: Request}\label{ps-request}
+
+It's not actually that surprising that I never heard of this before.
+There's a lot of really interesting, useful techniques that never leave
+their tiny bubble. Learning about MT was more luck than any action on my
+part.
+
+If you know of anything you think deserves wider use, please
+\href{mailto:h@hillelwayne.com}{email} me.

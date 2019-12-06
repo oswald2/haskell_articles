@@ -95,7 +95,6 @@ package. It's parameterized by two types:
 \item
   the type of a successfully validated value
 \end{enumerate}
-
 The \texttt{Validation} type is similar to the
 \href{https://hackage.haskell.org/package/base-4.12.0.0/docs/Data-Either.html\#t:Either}{Either}
 type. The major difference is that it \emph{accumulates} failures,
@@ -139,9 +138,9 @@ should always be successful. We define
 \begin{minted}{haskell}
 prop_valid_signup_form_succeeds = property $ do
   let genForm = SignupForm <$> validName <*> validAge  -- (1)
-  form <- forAll genForm  -- (2)
+  form <- forAll genForm                               -- (2)
 
-  case validateSignup form of -- (3)
+  case validateSignup form of                          -- (3)
     Success{}        -> pure ()
     Failure failure' -> do
       annotateShow failure'
@@ -206,10 +205,10 @@ prop_invalid_name_fails = property $ do
   let genForm = SignupForm <$> invalidName <*> validAge -- (1)
   form <- forAll genForm
 
-  case validateSignup form of  -- (2)
+  case validateSignup form of                           -- (2)
     Failure (NameTooLong{}  :| []) -> pure ()
     Failure (NameTooShort{} :| []) -> pure ()
-    other                          -> do -- (3)
+    other                          -> do                -- (3)
       annotateShow other
       failure
 \end{minted}
@@ -278,7 +277,7 @@ prop_two_failures_are_returned = property $ do
   let genForm = SignupForm <$> invalidName <*> invalidAge -- (1)
   form <- forAll genForm
   case validateSignup form of
-    Failure failures | length failures == 2 -> pure () -- (2)
+    Failure failures | length failures == 2 -> pure ()    -- (2)
     other -> do
       annotateShow other
       failure
@@ -297,8 +296,8 @@ prop_two_different_failures_are_returned = property $ do
   let genForm = SignupForm <$> invalidName <*> invalidAge
   form <- forAll genForm
   case validateSignup form of
-    Failure (failure1 :| [failure2]) -> -- (1)
-      failure1 /== failure2  -- (2)
+    Failure (failure1 :| [failure2]) ->              -- (1)
+      failure1 /== failure2                          -- (2)
     other                            -> do
       annotateShow other
       failure
@@ -615,9 +614,9 @@ the one testing that validating a form with all valid data succeeds:
 
 \begin{minted}{haskell}
 prop_valid_signup_form_succeeds = property $ do
-  today <- forAll anyDay   -- (1)
+  today <- forAll anyDay                               -- (1)
   let genForm = SignupForm <$> validName <*> validBirthDate today
-  form <- forAll genForm   -- (2)
+  form <- forAll genForm                               -- (2)
 
   case validateSignup today form of
     Success{}        -> pure ()
@@ -743,11 +742,11 @@ prop_validates_age = property $ do
   cover 1  "not yet born" notYetBorn
   cover 1  "too old"      tooOld
 
-  cover 20 "old enough"   oldEnough      -- (3)
+  cover 20 "old enough"   oldEnough                                 -- (3)
   cover 1  "exactly 18"   (exactly 18)
   cover 5  "close to 18"  (closeTo 18)
 
-  case validateSignup today form of      -- (4)
+  case validateSignup today form of                                 -- (4)
     Failure (NotYetBorn{} :| []) | notYetBorn -> pure ()
     Failure (TooYoung{} :| []) | tooYoung -> pure ()
     Failure (TooOld{} :| []) | tooOld -> pure ()
@@ -782,8 +781,8 @@ The \texttt{anyBirthDate} generator is based on today's date:
 \begin{minted}{haskell}
 anyBirthDate :: Day -> Gen Day
 anyBirthDate today =
-  let                               -- (1)
-      inPast range = do
+  let                                                      -- (1)
+      inPast range = do   
         years <- Gen.integral range
         pure (years `yearsBefore` today)
       inFuture = do
@@ -792,7 +791,7 @@ anyBirthDate today =
       daysAroundEighteenthYearsAgo = do
         days <- Gen.integral (Range.linearFrom 0 (-2) 2)
         pure (addDays days (18 `yearsBefore` today))
-  in                                -- (2)
+  in                                                       -- (2)
       Gen.frequency
         [ (5, inPast (Range.exponential 1 150))
         , (1, inPast (Range.exponential 151 200))

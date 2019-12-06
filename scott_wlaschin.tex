@@ -369,7 +369,7 @@ using lists of bools to start with.
 Here's an exercise for you: Is this property good enough? Is there some
 way that the EDFH can create an implementation that will pass?
 
-\section{``There and back again''}\label{there-and-back-again}
+\section{``There and back again''}\label{there-and-back-again2}
 
 Sometimes the multi-path style properties are not available or too
 complicated, so let's look at some other approaches.
@@ -413,7 +413,7 @@ does indeed ``undo'' the primary function (such as serialization).
 We'll see some real examples of using this in the next post.
 
 \section{``Hard to prove, easy to
-verify''}\label{hard-to-prove-easy-to-verify}
+verify''}\label{hard-to-prove-easy-to-verify2}
 
 So far we've been testing properties without actually caring about the
 end result of an operation. 
@@ -586,7 +586,7 @@ As it happens, we'll fix this particular problem by using the next
 principle!
 
 \section{``Some things never
-change''}\label{some-things-never-change}
+change''}\label{some-things-never-change2}
 
 A useful kind of property is based on an invariant that is preserved
 after some transformation, such as preserving length or contents.
@@ -932,7 +932,7 @@ the FsCheck documentation under ``And, Or and Labels''}.
 And now, back to the property-divising strategies.
 
 \section{``Solving a smaller
-problem''}\label{solving-a-smaller-problem}
+problem''}\label{solving-a-smaller-problem2}
 
 Sometimes you have a recursive data structure or a recursive problem. In
 these cases, you can often find a property that is true of a smaller
@@ -1017,7 +1017,7 @@ overlooked -- something that, when you discover it, will make your
 design both clearer and more robust.
 
 \section{``The more things change, the more they stay the
-same''}\label{the-more-things-change-the-more-they-stay-the-same}
+same''}\label{the-more-things-change-the-more-they-stay-the-same2}
 
 Our next type of property is ``idempotence''. Idempotence simply means
 that doing something twice is the same as doing it once. If I tell you
@@ -1134,7 +1134,7 @@ If you need tips on how to do this, searching for
 patterns} will turn up some good results.
 
 \section{``Two heads are better than
-one''}\label{two-heads-are-better-than-one}
+one''}\label{two-heads-are-better-than-one2}
 
 And finally, last but not least, we come to the ``test oracle''. A test
 oracle is simply an alternative implementation that gives the right
@@ -1308,7 +1308,7 @@ Check.Quick ``for all values of arabicNumber biquinary should give same
 \end{minted}
 And we're good! Both algorithms work correctly, it seems.
 
-\section{``Model-based'' testing}\label{model-based-testing}
+\section{``Model-based'' testing}\label{model-based-testing2}
 
 ``Model-based'' testing, which we will discuss in more detail in a later
 post, is a variant on having a test oracle.

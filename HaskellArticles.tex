@@ -214,7 +214,10 @@ bibtotoc,						% Literaturverzeichnis im Inhalt
 
 \usepackage{minted}
                    
-                   
+\usepackage{scrextend}
+
+
+
                    
 % 3-spaltiger Index
 \makeatletter
@@ -289,6 +292,22 @@ bibtotoc,						% Literaturverzeichnis im Inhalt
 \else
 	\DeclareGraphicsExtensions{.eps}
 \fi
+
+
+\newcommand*{\mtol}{This is some more text than fit at ony line but only some
+  and not a lot}
+
+\newenvironment{mldescription}{%
+  \begin{addmargin}[2em]{1em}
+    \setlength{\parindent}{-1em}%
+    \newcommand*{\mlitem}[1]{\par\textbf{##1}\quad}\indent
+}{%
+  \end{addmargin}
+  \medskip
+}
+
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %\includegraphics[wid%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -410,38 +429,43 @@ Posts in each section are roughly ordered by difficulty.
 
 \part{Posts on designing and structuring code}
 
-% \input{matt_parsons.tex}
-% 
-% \input{david_luposchainsky.tex}
-% 
-% \input{alexis_king.tex}
-% 
-% \input {jasper_van_der_jeugt.tex}
-% 
-% \input {tom_ellis.tex}
-% 
-% \input{michael_snoyman.tex}
-% 
-% \input{matt_parsons2.tex}
-% 
-% \input{sandy_maguire.tex}
+\input{matt_parsons.tex}
+
+\input{david_luposchainsky.tex}
+
+\input{alexis_king.tex}
+
+\input {jasper_van_der_jeugt.tex}
+
+\input {tom_ellis.tex}
+
+\input{michael_snoyman.tex}
+
+\input{matt_parsons2.tex}
+
+\input{sandy_maguire.tex}
 
 
 
 \part{Posts on testing}
 
 
-% \input {jasper_van_der_jeugt2.tex}
-% 
-% \input{oskar_wickstrom.tex}
-% 
-% \input{scott_wlaschin.tex}
-% 
-% \input{hillel_wayne.tex}
+\input {jasper_van_der_jeugt2.tex}
+
+\input{oskar_wickstrom.tex}
+
+\input{scott_wlaschin.tex}
+
+\input{hillel_wayne.tex}
 
 \input{alexis_king2.tex}
 
 \input{oskar_wickstrom2.tex}
+
+\input{hillel_wayne2.tex}
+
+\input{alexis_king3.tex}
+
 
 
 

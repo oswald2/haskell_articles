@@ -241,3 +241,6 @@ TSWLatexianTemp*
 # generated if using elsarticle.cls
 *.spl
 tmp/
+git_hash.tex
+*~
+

@@ -12,7 +12,7 @@
 
 
 
-Object-oriented programming languages make unit testing easy by
+\noindent Object-oriented programming languages make unit testing easy by
 providing obvious boundaries between units of code in the form of
 classes and interfaces. These boundaries make it easy to stub out parts
 of a system to test functionality in isolation, which makes it possible
@@ -488,7 +488,6 @@ exactly what it's doing.
   derive all the relevant \texttt{mtl} classes, adding the somewhat
   wordy \texttt{MonadReader} constraint to the list.
 \end{enumerate}
-
 Using this single type, we can now implement a \texttt{MonadFS} instance
 that defers to the dictionary carried around within \texttt{TestM}'s
 reader state:
@@ -523,7 +522,6 @@ spec = describe "reverseFile" $ do
     let paths = logTestM pathInst (reverseFile "foo.txt")
     paths `shouldBe` ["foo.txt", "foo.txt"]
 \end{minted}
-
 We can do a little bit better, though. Really, the definitions of
 \texttt{contentInst} and \texttt{pathInst} are specific to each test
 case. With ordinary typeclass instances, we cannot scope them to any

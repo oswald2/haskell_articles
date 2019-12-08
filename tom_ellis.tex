@@ -69,19 +69,12 @@ There's a \texttt{undefined} in there. That is always a red flag. In this case u
 
 We don't need to know what the program does to apply this refactoring but knowing it does give us more confidence that we are doing the right thing.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice -> DiceState -> [ DiceState ]
- allRolls [] ([], n) = [ ([], n-1) ]
--allRolls [] _ = undefined
-+allRolls [] _ =
-+  error "Invariant violated: choices must be same length as vals"
- allRolls (chosen:choices) (v:vs, n) =
-     allRolls choices (vs, n-1) >>=
-         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
-\end{minted}
-
-
-
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff1.pdf}
+ \caption{Explain the invariant}
+ \label{fig:diff1}
+\end{figure}
 
 \section{Avoid catch-all pattern}
 
@@ -89,13 +82,12 @@ I prefer to have as few overlapping patterns as possible, even ``catch-all'' \te
 
 We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice -> DiceState -> [ DiceState ]
- allRolls [] ([], n) = [ ([], n-1) ]
--allRolls [] _ =
-+allRolls [] (_:_, _) =
-   error "Invariant violated: choices must be same length as vals"
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff2.pdf}
+ \caption{Avoid catch-all pattern}
+ \label{fig:diff2}
+\end{figure}
 
 \section{Add another invariant check}
 
@@ -103,14 +95,12 @@ There's actually a missing pattern (which \texttt{-Wall} will pick up). Let's ad
 
 Like with the first invariant check, we don't need to know what the program does to apply this refactoring but knowing it does give us more confidence that we are doing the right thing.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice -> DiceState -> [ DiceState ]
- allRolls [] ([], n) = [ ([], n-1) ]
- allRolls [] (_:_, _) =
-   error "Invariant violated: choices must be same length as vals"
-+allRolls (_:_) ([], _) =
-+  error "Invariant violated: choices must be same length as vals"
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff3.pdf}
+ \caption{Add another invariant check}
+ \label{fig:diff3}
+\end{figure}
 
 \section{Add pop function}
 
@@ -152,15 +142,12 @@ Let's indicate that the argument is unused by applying an error instead. In a la
 
 When we run this we don't get a crash, which implies that that argument was indeed not used.
 
-\begin{minted}{haskell}
- allRolls choices (vs, n) = case pop choices vs of
-   Nothing -> [ ([], n-1) ]
-   Just ((chosen, v), (choices, vs)) ->
--    allRolls choices (vs, n-1) >>=
-+    allRolls choices (vs, error "Didn't expect to use") >>=
-         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
-           where rollList = if chosen then [v] else [ 1..6 ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff4.pdf}
+ \caption{Indicate that a value is unused}
+ \label{fig:diff4}
+\end{figure}
            
 \section{Prepare to rearrange arguments}
 
@@ -169,19 +156,12 @@ Given the observation above I see no reason to package the \texttt{DiceVals} and
 
 We don't need to know what the program does to apply this refactoring. We just have to observe that the \texttt{DiceVals} and the \texttt{Integer} are not really used together.
 
-\begin{minted}{haskell}
- type DiceChoice = [ Bool ]
- type DiceVals   = [ Integer ]
--type DiceState = (DiceVals, Integer)
-
-...
-
--allRolls :: DiceChoice -> DiceState -> [ DiceState ]
-+allRolls :: DiceChoice
-+         -> (DiceVals, Integer)
-+         -> [ (DiceVals, Integer) ]
-\end{minted}
-
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff6.pdf}
+ \caption{Prepare to rearrange arguments}
+ \label{fig:diff6}
+\end{figure}
 
 \section{Rearrange arguments}
 
@@ -190,27 +170,12 @@ Now let's do the separation of the arguments. The size of the diff makes the cha
 
 We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice
--         -> (DiceVals, Integer)
-+         -> DiceVals
-+         -> Integer
-          -> [ (DiceVals, Integer) ]
--allRolls choices (vs, n) = case pop choices vs of
-+allRolls choices vs n = case pop choices vs of
-   Nothing -> [ ([], n-1) ]
-   Just ((chosen, v), (choices, vs)) ->
--    allRolls choices (vs, error "Didn't expect to use") >>=
-+    allRolls choices vs (error "Didn't expect to use") >>=
-         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
-           where rollList = if chosen then [v] else [ 1..6 ]
-
- example =
-   let diceChoices = [ False, True, True, False, False ]
-       diceVals = [ 6, 4, 4, 3, 1 ]
--  in mapM_ print $ allRolls diceChoices (diceVals, 2)
-+  in mapM_ print $ allRolls diceChoices diceVals 2
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff5.pdf}
+ \caption{Rearrange arguments}
+ \label{fig:diff5}
+\end{figure}
 
 \section{Rearrange arguments further}
 
@@ -218,55 +183,24 @@ Once we have separated \texttt{DiceVals} from the \texttt{Integer} we notice tha
 
 We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
--pop :: DiceChoice
--    -> DiceVals
-+pop :: (DiceChoice, DiceVals)
-     -> Maybe ((Bool, Integer), (DiceChoice, DiceVals))
--pop [] [] = Nothing
--pop (chosen:choices) (v:vs) = Just ((chosen, v), (choices, vs))
--pop (_:_) [] = error "Invariant violated: missing val"
--pop [] (_:_) = error "Invariant violated: missing choice"
-+pop ([], []) = Nothing
-+pop (chosen:choices, v:vs) = Just ((chosen, v), (choices, vs))
-+pop (_:_, []) = error "Invariant violated: missing val"
-+pop ([], _:_) = error "Invariant violated: missing choice"
-
--allRolls :: DiceChoice
--         -> DiceVals
-+allRolls :: (DiceChoice, DiceVals)
-          -> Integer
-          -> [ (DiceVals, Integer) ]
--allRolls choices vs n = case pop choices vs of
-+allRolls (choices, vs) n = case pop (choices, vs) of
-   Nothing -> [ ([], n-1) ]
-   Just ((chosen, v), (choices, vs)) ->
--    allRolls choices vs (error "Didn't expect to use") >>=
-+    allRolls (choices, vs) (error "Didn't expect to use") >>=
-         \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
-           where rollList = if chosen then [v] else [ 1..6 ]
-
- example =
-   let diceChoices = [ False, True, True, False, False ]
-       diceVals = [ 6, 4, 4, 3, 1 ]
--  in mapM_ print $ allRolls diceChoices diceVals 2
-+  in mapM_ print $ allRolls (diceChoices, diceVals) 2
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff7.pdf}
+ \caption{Rearrange arguments further}
+ \label{fig:diff7}
+\end{figure}
 
 \section{Avoid unpacking tuple}
 
 
 We no longer need to unpack the tuple! We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
--allRolls (choices, vs) n = case pop (choices, vs) of
-+allRolls t n = case pop t of
-   Nothing -> [ ([], n-1) ]
--  Just ((chosen, v), (choices, vs)) ->
--    allRolls (choices, vs) (error "Didn't expect to use") >>=
-+  Just ((chosen, v), t) ->
-+    allRolls t (error "Didn't expect to use") >>=
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff8.pdf}
+ \caption{Avoid unpacking tuple}
+ \label{fig:diff8}
+\end{figure}
 
 \section{We don't use the Integer. Make this structural.}
 
@@ -275,24 +209,12 @@ Given that we have an unused argument in the recursive call let's see if we can 
 
 This is the second time we have to actually analyse how our program works rather than just apply a mechanical translation.
 
-\begin{minted}{haskell}
- allRolls :: (DiceChoice, DiceVals)
-          -> Integer
-          -> [ (DiceVals, Integer) ]
--allRolls t n = case pop t of
--  Nothing -> [ ([], n-1) ]
-+allRolls t n = [ (vals, n-1) | vals <- allRollsNoN t ]
-+
-+allRollsNoN :: (DiceChoice, DiceVals) -> [ DiceVals ]
-+allRollsNoN t = case pop t of
-+  Nothing -> [ [] ]
-   Just ((chosen, v), t) ->
--    allRolls t (error "Didn't expect to use") >>=
--        \(roll,_) -> [ (d:roll,  n-1) | d <- rollList ]
-+    allRollsNoN t >>=
-+        \roll -> [ d:roll | d <- rollList ]
-           where rollList = if chosen then [v] else [ 1..6 ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff9.pdf}
+ \caption{We don't use the Integer}
+ \label{fig:diff9}
+\end{figure}
 
 \section{Introduce a type synonym}
 
@@ -301,27 +223,12 @@ Given that \texttt{DiceChoice} and \texttt{DiceVals} seem to belong together let
 
 We don't need to know what the program does to apply this refactoring. We just observe that the pair of things are always used together.
 
-\begin{minted}{haskell}
-+type DiceTurn  = (DiceChoice, DiceVals)
-
--pop :: (DiceChoice, DiceVals)
--    -> Maybe ((Bool, Integer), (DiceChoice, DiceVals))
-+pop :: DiceTurn
-+    -> Maybe ((Bool, Integer), DiceTurn)
- pop ([], []) = Nothing
- pop (chosen:choices, v:vs) = Just ((chosen, v), (choices, vs))
- pop (_:_, []) = error "Invariant violated: missing val"
- pop ([], _:_) = error "Invariant violated: missing choice"
-
--allRolls :: (DiceChoice, DiceVals)
-+allRolls :: DiceTurn
-          -> Integer
-          -> [ (DiceVals, Integer) ]
- allRolls t n = [ (vals, n-1) | vals <- allRollsNoN t ]
-
--allRollsNoN :: (DiceChoice, DiceVals) -> [ DiceVals ]
-+allRollsNoN :: DiceTurn -> [ DiceVals ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff10.pdf}
+ \caption{Introduce a type synonym}
+ \label{fig:diff10}
+\end{figure}
 
 
 \section{Make illegal states unrepresentable}
@@ -333,71 +240,35 @@ The fix is to put pairs of dice choice and dice vals in the same list! We can en
 
 Consumers will have to change too but they'll be better off for it! In \texttt{example} I just \texttt{zip}ped the args. It could also be something much better.
 
-\begin{minted}{haskell}
--type DiceChoice = [ Bool ]
- type DiceVals   = [ Integer ]
--type DiceTurn  = (DiceChoice, DiceVals)
-+type DiceTurn  = [(Bool, Integer)]
-
- pop :: DiceTurn
-     -> Maybe ((Bool, Integer), DiceTurn)
--pop ([], []) = Nothing
--pop (chosen:choices, v:vs) = Just ((chosen, v), (choices, vs))
--pop (_:_, []) = error "Invariant violated: missing val"
--pop ([], _:_) = error "Invariant violated: missing choice"
-+pop [] = Nothing
-+pop (a:as) = Just (a, as)
-
- allRolls :: DiceTurn
-          -> Integer
-@@ -25,4 +22,4 @@ allRollsNoN t = case pop t of
- example =
-   let diceChoices = [ False, True, True, False, False ]
-       diceVals = [ 6, 4, 4, 3, 1 ]
--  in mapM_ print $ allRolls (diceChoices, diceVals) 2
-+  in mapM_ print $ allRolls (zip diceChoices diceVals) 2
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff11.pdf}
+ \caption{Make illegal states unrepresentable}
+ \label{fig:diff11}
+\end{figure}
 
 \section{Use uncons}
 
 Having done that we see that \texttt{pop} is just the standard function ``\texttt{uncons}''. We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
-+import Data.List (uncons)
-+
- type DiceVals   = [ Integer ]
- type DiceTurn  = [(Bool, Integer)]
-
--pop :: DiceTurn
--    -> Maybe ((Bool, Integer), DiceTurn)
--pop [] = Nothing
--pop (a:as) = Just (a, as)
--
- allRolls :: DiceTurn
-          -> Integer
-          -> [ (DiceVals, Integer) ]
- allRolls t n = [ (vals, n-1) | vals <- allRollsNoN t ]
-
- allRollsNoN :: DiceTurn -> [ DiceVals ]
--allRollsNoN t = case pop t of
-+allRollsNoN t = case uncons t of
-\end{minted}
-
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff12.pdf}
+ \caption{Use uncons}
+ \label{fig:diff12}
+\end{figure}
 
 \section{Don't need uncons}
 
 
 Having said that, we don't actually need \texttt{uncons}. We can just pattern match directly. We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
- allRollsNoN :: DiceTurn -> [ DiceVals ]
--allRollsNoN t = case uncons t of
--  Nothing -> [ [] ]
--  Just ((chosen, v), t) ->
-+allRollsNoN t = case t of
-+  [] -> [ [] ]
-+  (chosen, v):t ->
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff13.pdf}
+ \caption{Don't need uncons}
+ \label{fig:diff13}
+\end{figure}
 
 \section{Use do notation}
 
@@ -405,18 +276,12 @@ The use of the bind operator (\texttt{>>=}) and list comprehension are not parti
 
 We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
- allRollsNoN :: DiceTurn -> [ DiceVals ]
- allRollsNoN t = case t of
-   [] -> [ [] ]
--  (chosen, v):t ->
--    allRollsNoN t >>=
--        \roll -> [ d:roll | d <- rollList ]
-+  (chosen, v):t -> do
-+    roll <- allRollsNoN t
-+    d    <- rollList
-+    [ d:roll ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff14.pdf}
+ \caption{Use do notation}
+ \label{fig:diff14}
+\end{figure}
 
 
 \section{Prepare for \texttt{mapM}}
@@ -426,34 +291,25 @@ We can see from the above that what our program does is takes the head of a list
 In this change we just make the function we are mapping take explicit arguments. We'll switch to use \texttt{mapM} in the next change. 
 We don't need to know what the program does to apply this refactoring.
 
-\begin{minted}{haskell}
-   (chosen, v):t -> do
-     roll <- allRollsNoN t
--    d    <- rollList
-+    d    <- rollList (chosen, v)
-     [ d:roll ]
--          where rollList = if chosen then [v] else [ 1..6 ]
-+          where rollList (chosen, v)
-+                    = if chosen then [v] else [ 1..6 ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff15.pdf}
+ \caption{Prepare for \texttt{mapM}}
+ \label{fig:diff15}
+\end{figure}
+
 
 \section{Use \texttt{mapM}}
 
 Now we can just use \texttt{mapM} directly. 
 We don't need to know what the program does to apply this refactoring but we do need to know the general concept of ``mapping'' and the specific implementation \texttt{mapM}. Be careful! This particular ``refactoring'' actually reverses the order of effects -- the list of dice rolls will come out in a different order.
 
-\begin{minted}{haskell}
--allRollsNoN t = case t of
--  [] -> [ [] ]
--  (chosen, v):t -> do
--    roll <- allRollsNoN t
--    d    <- rollList (chosen, v)
--    [ d:roll ]
--          where rollList (chosen, v)
--                    = if chosen then [v] else [ 1..6 ]
-+allRollsNoN =
-+    mapM (\(chosen, v) -> if chosen then [v] else [ 1..6 ])
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff16.pdf}
+ \caption{Use \texttt{mapM}}
+ \label{fig:diff16}
+\end{figure}
 
 
 \section{Avoid boolean blindness}
@@ -470,21 +326,13 @@ Let's add a type to avoid ``boolean blindness''. The type of \texttt{allRollsBet
 
 We don't need to know what the program does to apply this refactoring. It requires the uncontroversial \texttt{LambdaCase} language extension.
 
-\begin{minted}{haskell}
--allRollsNoN =
--    mapM (\(chosen, v) -> if chosen then [v] else [ 1..6 ])
-+allRollsNoN = allRollsBetter . map fromTurn
-+
-+data DiceChoice = Keep Integer | Reroll
-+
-+fromTurn :: (Bool, Integer) -> DiceChoice
-+fromTurn (chosen, v) = if chosen then Keep v else Reroll
-+
-+allRollsBetter :: [DiceChoice] -> [ DiceVals ]
-+allRollsBetter = mapM $ \case
-+  Reroll -> [ 1..6 ]
-+  Keep v -> [v]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff17.pdf}
+ \caption{Avoid boolean blindness}
+ \label{fig:diff17}
+\end{figure}
+
 
 
 \section{Keep the better version}
@@ -608,16 +456,12 @@ Where is it used? We can see that each branch of the \texttt{case} statement ret
 
 I'll write the ``pair with n-1'' function as verb|(, n-1)| (using the \texttt{TupleSections} extension). The usual alternative would be to write \texttt{\\x -> (x, n-1)} but in this article I want to keep things compact.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice -> DiceState -> [ DiceState ]
- allRolls choices (vs, n) = case pop choices vs of
--  Nothing -> [ ([], n-1) ]
-+  Nothing -> fmap (, n-1) [ [] ]
-   Just ((chosen, v), (choices, vs)) -> do
-     (roll, _) <- allRolls choices (vs, n-1)
--    [ (d:roll,  n-1) | d <- rollList ]
-+    fmap (, n-1) [ d:roll | d <- rollList ]
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff18.pdf}
+ \caption{Observe that both branches pair a list with n-1}
+ \label{fig:diff18}
+\end{figure}
 
 
 \section{Lift fmap outside \texttt{do}}
@@ -637,14 +481,13 @@ Why is this rewriting valid? Informally, a \texttt{do} block is like a procedure
 
 This is how the rewriting applies in our case:
 
-\begin{minted}{haskell}
--  Just ((chosen, v), (choices, vs)) -> do
-+  Just ((chosen, v), (choices, vs)) -> fmap (, n-1) $ do
-     (roll, _) <- allRolls choices (vs, n-1)
--    fmap (, n-1) [ d:roll | d <- rollList ]
-+    [ d:roll | d <- rollList ]
-\end{minted}
-
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff19.pdf}
+ \caption{Lift fmap outside \texttt{do}}
+ \label{fig:diff19}
+\end{figure}
+ 
 \section{Combine duplicated functions at top level}
 
 
@@ -664,14 +507,12 @@ f $ case x of
 \end{minted}
 which in our code leads to
 
-\begin{minted}{haskell}
--allRolls choices (vs, n) = case pop choices vs of
--  Nothing -> fmap (, n-1) [ [] ]
--  Just ((chosen, v), (choices, vs)) -> fmap (, n-1) $ do
-+allRolls choices (vs, n) = fmap (, n-1) $ case pop choices vs of
-+  Nothing -> [ [] ]
-+  Just ((chosen, v), (choices, vs)) -> do
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff20.pdf}
+ \caption{Lift fmap outside \texttt{do}}
+ \label{fig:diff20}
+\end{figure}
 
 
 \section{Split function body into separate function}
@@ -679,14 +520,12 @@ which in our code leads to
 
 We want to carefully separate the parts of the code for which the value of \texttt{n} matters from the parts of the code for which the value of n does not matter. To this end we split the body of \texttt{allRolls} into a separate function called \texttt{allRollsBody}.
 
-\begin{minted}{haskell}
- allRolls :: DiceChoice -> DiceState -> [ DiceState ]
--allRolls choices (vs, n) = fmap (, n-1) $ case pop choices vs of
-+allRolls choices (vs, n) = fmap (, n-1) $ allRollsBody choices (vs, n)
-+
-+allRollsBody :: DiceChoice -> DiceState -> [ DiceVals ]
-+allRollsBody choices (vs, n) = case pop choices vs of
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff21.pdf}
+ \caption{Split function body into separate function}
+ \label{fig:diff21}
+\end{figure}
 
 
 \section{Substitute definition of \texttt{allRolls}}
@@ -695,10 +534,12 @@ Now we are in the nice situation that, although we are yet to prove it to our sa
 
 However, we've ended up with a pair of mutually recursive functions! That's somewhat unusual. In order to make \texttt{allRollsBody} recurse only on itself we substitute the definition of \texttt{allRolls} back into \texttt{allRollsBody}. Additionally, that makes \texttt{allRolls} not recursive at all.
 
-\begin{minted}{haskell}
--    (roll, _) <- allRolls choices (vs, n-1)
-+    (roll, _) <- fmap (, n-1) $ allRollsBody choices (vs, n-1)
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff22.pdf}
+ \caption{Substitute definition of \texttt{allRolls}}
+ \label{fig:diff22}
+\end{figure}
 
 
 \section{Remove redundant pairing}
@@ -706,10 +547,12 @@ However, we've ended up with a pair of mutually recursive functions! That's some
 
 We're pairing every element of a list with $n-1$ and then immediately removing it. Let's just avoid the pairing in the first place.
 
-\begin{minted}{haskell}
--    (roll, _) <- fmap (, n-1) $ allRollsBody choices (vs, n-1)
-+    roll <- allRollsBody choices (vs, n-1)
-\end{minted}
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{./pics/diff23.pdf}
+ \caption{Remove redundant pairing}
+ \label{fig:diff23}
+\end{figure}
 
 
 \section{Generalise type of \texttt{allRollsBody}}

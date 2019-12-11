@@ -1,0 +1,709 @@
+\chapter{The ReaderT Design Pattern - Michael Snoyman}
+
+\noindent\textit{Original article: \cite{readert_pattern}}
+
+\vspace{\baselineskip}
+
+\noindent Often times I'll receive or read questions online about ``design
+patterns'' in Haskell. A common response is that Haskell doesn't have
+them. What many languages address via patterns, in Haskell we address
+via language features (like built-in immutability, lambdas, laziness,
+etc). However, I believe there is still room for some high-level
+guidance on structuring programs, which I'll loosely refer to as a
+Haskell design pattern.
+
+The pattern I'm going to describe today is what I've been referring to
+as the ``ReaderT pattern'' for a few years now, at least in informal
+discussions. I use it as the basis for the design of Yesod's
+\texttt{Handler} type, it describes the majority of the Stack code base,
+and I've recommended it to friends, colleagues, and customers regularly.
+
+That said, this pattern is not universally held in the Haskell world,
+and plenty of people design their code differently. So remember that,
+like
+\href{https://www.fpcomplete.com/blog/2016/11/exceptions-best-practices-haskell}{other
+articles I've written}, this is highly opinionated, but represents my
+personal and FP Complete's best practices recommendations.
+
+Let's summarize the pattern, and then get into details and exceptions:
+
+\begin{itemize}
+
+\item
+  Your application should define a core data type (call it \texttt{Env}
+  if you want).
+\item
+  This data type will contain all runtime configuration and global
+  functions that may be mockable (like logging functions or database
+  access).
+\item
+  If you must have some mutable state, put it in \texttt{Env} as a
+  mutable reference (\texttt{IORef}, \texttt{TVar}, etc).
+\item
+  Your application code will, in general, live in
+  \texttt{ReaderT\ Env\ IO}. Define it as
+  \texttt{type\ App\ =\ ReaderT\ Env\ IO} if you wish, or use a newtype
+  wrapper instead of \texttt{ReaderT} directly.
+\item
+  You can use additional monad transformers on occassion, but only for
+  small subsets of your application, and it's best if those subsets are
+  pure code.
+\item
+  Optional: instead of directly using the \texttt{App} datatype, write
+  your functions in terms of mtl-style typeclasses like
+  \texttt{MonadReader} and \texttt{MonadIO}, which will allow you to
+  recover some of the purity you think I just told you to throw away
+  with \texttt{IO} and mutable references.
+\end{itemize}
+That's a lot to absorb all at once, some of it (like the mtl
+typeclasses) may be unclear, and other parts (especially that mutable
+reference bit) probably seems completely wrong. Let me motivate these
+statements and explain the nuances.
+
+\section{Better globals}
+
+Let's knock out the easy parts of this. Global variables are bad, and
+mutable globals are far worse. Let's say you have an application which
+wants to configure its logging level (e.g., should we print or swallow
+DEBUG level messages?). There are three common ways you might do this in
+Haskell:
+
+\begin{enumerate}
+
+\item
+  Use a compile-time flag to control which logging code gets included in
+  your executable
+\item
+  Define a global value which reads a config file (or environment
+  variables) with \texttt{unsafePerformIO}
+\item
+  Read the config file in your \texttt{main} function and then pass the
+  value (explicitly, or implicitly via \texttt{ReaderT}) to the rest of
+  your code
+\end{enumerate}
+(1) is tempting, but experience tells me it's a terrible solution. Every
+time you have conditional compilation in your codebase, you're adding in
+a fractal of possible build failures. If you have 5 conditionals, you
+now have 32 (2\^{}5) possible build configurations. Are you sure you
+have the right set of import statements for all of those 32
+configurations? It's just a pain to deal with. Moreover, do you really
+want to decide at \emph{compile time} that you're not going to need
+debug information? I'd much rather be able to flip a \texttt{false} to
+\texttt{true} in a config file and restart my app to get more
+information while debugging.
+
+(By the way, even better than this is the ability to signal the process
+\emph{while it's running} to change debug levels, but we'll leave that
+out for now. The \texttt{ReaderT}+mutable variable pattern is one of the
+best ways to achieve this.)
+
+OK, so you've agreed with me that you shouldn't conditionally compile.
+Now that you've written your whole application, however, you're probably
+hesitant to have to rewrite it to thread through some configuration
+value everywhere. I get that, it's a pain. So you decide you'll just use
+\texttt{unsafePerformIO}, since the file will be read once, it's a
+pure-ish value for the entire runtime, and everything seems mostly safe.
+However:
+
+\begin{itemize}
+
+\item
+  You now have a slight level of non-determinism of where exceptions
+  will occur. If you have a missing or invalid config file, where will
+  the exception get thrown from? I'd much rather that occur immediately
+  on app initialization.
+\item
+  Suppose you want to run one small part of the application with louder
+  debug information (because you know it's more likely to fail thant the
+  rest of your code). You basically can't do this at all.
+\item
+  Just wait until you use STM inside your config file parsing for some
+  reason, and then your config value first gets evaluated inside a
+  \emph{different} STM block. (And
+  \href{https://github.com/snoyberg/yaml/issues/86}{there's no way that
+  could ever happen}.)
+\item
+  Every time you use \texttt{unsafePerformIO}, a kitten dies.
+\end{itemize}
+It's time to just bite the bullet, define some \texttt{Env} data type,
+put the config file values in it, and thread it through your
+application. If you design your application from the beginning like
+this: great, no harm done. Doing it later in application development is
+certainly a pain, but the pain can be mitigated by some of what I'll say
+below. And it is \emph{absolutely} better to suck up a little pain with
+mechanical code rewriting than be faced with race conditions around
+\texttt{unsafePerformIO}. Remember, this is Haskell: we'd rather face
+compile time rather than runtime pain.
+
+Once you've accepted your fate and gone all-in on (3), you're on easy
+street:
+
+\begin{itemize}
+
+\item
+  Have some new config value to pass around? Easy, just augment the
+  \texttt{Env} type.
+\item
+  Want to temporarily bump the log level? Use \texttt{local} and you're
+  golden
+\end{itemize}
+You're now far less likely to resort to ugly hacks like CPP code (1) or
+global variables (2), because you've eliminated the potential pain from
+doing it the Right Way.
+
+\subsection{Initializing resources}
+
+The case of reading a config value is nice, but even nicer is
+initializing some resources. Suppose you want to initialize a random
+number generator, open up a \texttt{Handle} for sending log messages to,
+set up a database pool, or create a temporary directory to store files
+in. These are all far more logical to do inside \texttt{main} than from
+some global position.
+
+One advantage of the global variable approach for these kinds of
+initializations is that it can be defered until the first time the value
+is used, which is nice if you think some resources may not always be
+needed. But if that's what you want, you can use an approach like
+\href{https://github.com/commercialhaskell/stack/blob/master/src/Data/IORef/RunOnce.hs}{\texttt{runOnce}}.
+
+\section{Avoiding WriterT and StateT}
+
+Why in the world would I ever recommend mutable references as anything
+but a last resort? We all know that purity in Haskell is paramount, and
+mutability is the devil. And besides, we have these wonderful things
+called \texttt{WriterT} and \texttt{StateT} if we have some values that
+need to change over time in our application, so why not use them?
+
+In fact, early versions of Yesod did just that: they used a
+\texttt{StateT} kind of approach within \texttt{Handler} to allow you to
+modify the user session values and set response headers. However, I
+switched over to mutable references quite a while ago, and here's why:
+
+\textbf{Exception-survival} If you have a runtime exception, you will
+\emph{lose your state} in \texttt{WriterT} and \texttt{StateT}. Not so
+with a mutable reference: you can read the last available state before
+the runtime exception was thrown. We use this to great benefit in Yesod,
+to be able to set response headers even if the response fails with
+something like a \texttt{notFound}.
+
+\textbf{False purity} We say \texttt{WriterT} and \texttt{StateT} are
+pure, and technically they are. But let's be honest: if you have an
+application which is entirely living within a \texttt{StateT}, you're
+not getting the benefits of restrained mutation that you want from pure
+code. May as well call a spade a spade, and accept that you have a
+mutable variable.
+
+\textbf{Concurrency} What's the result of
+\texttt{put\ 4\ \textgreater{}\textgreater{}\ concurrently\ (modify\ (+\ 1))\ (modify\ (+\ 2))\ \textgreater{}\textgreater{}\ get}?
+You may \emph{want} to say that it will be \texttt{7}, but it definitely
+won't be. Your options, depending on how \texttt{concurrently} is
+implemented with regards to the state provided by \texttt{StateT}, are
+\texttt{4}, \texttt{5}, or \texttt{6}. Don't believe me? Play around
+with:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+import Control.Concurrent.Async.Lifted
+import Control.Monad.State.Strict
+
+main :: IO ()
+main = execStateT
+    (concurrently (modify (+ 1)) (modify (+ 2)))
+    4 >>= print
+\end{minted}
+The issue is that we need to clone the state from the parent thread into
+both child threads, and then \emph{arbitrarily pick} which child state
+will survive. Or, if we want to, we can just throw both child states
+away and continue with the original parent state. (By the way, if you
+think the fact that this code compiles is a bad thing, I agree, and
+suggest you use \texttt{Control.Concurrent.Async.Lifted.Safe}.)
+
+Dealing with mutable state between different threads is a hard problem,
+but \texttt{StateT} doesn't \emph{fix} the problem, it \emph{hides} it.
+If you use a mutable variable, you'll be forced to think about this.
+What semantics do we want? Should we use an \texttt{IORef}, and stick to
+\texttt{atomicModifyIORef}? Should we use a \texttt{TVar}? These are
+fair questions, and ones we'll be forced to examine. For a
+\texttt{TVar}-like approach:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+{-# LANGUAGE FlexibleContexts #-}
+import Control.Concurrent.Async.Lifted.Safe
+import Control.Monad.Reader
+import Control.Concurrent.STM
+
+modify :: (MonadReader (TVar Int) m, MonadIO m)
+       => (Int -> Int)
+       -> m ()
+modify f = do
+  ref <- ask
+  liftIO $ atomically $ modifyTVar' ref f
+
+main :: IO ()
+main = do
+  ref <- newTVarIO 4
+  runReaderT (concurrently (modify (+ 1)) (modify (+ 2))) ref
+  readTVarIO ref >>= print
+\end{minted}
+And you can even get a little fancier with
+\href{https://www.stackage.org/package/monad-unlift-ref}{prebaked
+transformers}.
+
+\textbf{WriterT is broken} Don't forget that, as Gabriel Gonzalez has
+demonstrated,
+\href{https://mail.haskell.org/pipermail/libraries/2012-October/018599.html}{even
+the strict \texttt{WriterT} has a space leak}.
+
+\textbf{Caveats} I still do use \texttt{StateT} and \texttt{WriterT}
+sometimes. One prime example is Yesod's \texttt{WidgetT}, which is
+essentially a \texttt{WriterT} sitting on top of \texttt{HandlerT}. It
+makes sense in that context because:
+
+\begin{itemize}
+
+\item
+  The mutable state is expected to be modified for a small subset of the
+  application
+\item
+  Although we can perform side-effects while building up the widget, the
+  widget construction itself is a morally pure activity
+\item
+  We don't need to let state survive an exception: if something goes
+  wrong, we'll send back an error page instead
+\item
+  There's no good reason to use concurrency when constructing a widget.
+\item
+  Despite my space leak concerns, I thoroughly benchmarked
+  \texttt{WriterT} against alternatives, and found it to be the fastest
+  for this use case. (Numbers beat reasoning.)
+\end{itemize}
+The other great exception to this rule is pure code. If you have some
+subset of your application which can perform no \texttt{IO} but needs
+some kind of mutable state, absolutely, 100\%, please use
+\texttt{StateT}.
+
+\section{Avoiding ExceptT}
+
+I'm already
+\href{https://www.fpcomplete.com/blog/2016/11/exceptions-best-practices-haskell}{strongly
+on record} as saying that \texttt{ExceptT} over \texttt{IO} is a bad
+idea. To briefly repeat myself: the contract of \texttt{IO} is that any
+exception can be thrown at any time, so \texttt{ExceptT} doesn't
+actually document possible exceptions, it misleads. You can see that
+blog post for more details.
+
+I'm rehashing this here because some of the downsides of \texttt{StateT}
+and \texttt{WriterT} apply to \texttt{ExceptT} as well. For example, how
+do you handle concurrency in an \texttt{ExceptT}? With runtime
+exceptions, the behavior is clear: when using \texttt{concurrently}, if
+any child thread throws an exception, the other thread is killed and the
+exception rethrown in the parent. What behavior do you want with
+\texttt{ExceptT}?
+
+Again, you can use \texttt{ExceptT} from pure code where a runtime
+exception is not part of the contract, just like you should use
+\texttt{StateT} in pure code. But once we've eliminated \texttt{StateT},
+\texttt{WriterT}, and \texttt{ExceptT} from our main application
+transformers, we're left with...
+
+\section{Just ReaderT}
+
+And now you know why I call this ``the ReaderT design pattern''.
+\texttt{ReaderT} has a huge advantage over the other three transformers
+listed: \emph{it has no mutable state}. It's simply a convenient manner
+of passing an extra parameter to all functions. And even if that
+parameter contains mutable references, that parameter itself is fully
+immutable. Given that:
+
+\begin{itemize}
+
+\item
+  We get to ignore all of the state-overwriting issues I mentioned with
+  concurrency. Notice how we were able to use the \texttt{.Safe} module
+  in the example above. That's because it is \emph{actually safe} to do
+  concurrency with a \texttt{ReaderT}.
+\item
+  Similarly, you can use the
+  \href{https://www.stackage.org/package/monad-unlift}{\texttt{monad-unlift}
+  library} package
+\item
+  Deep monad transformer stacks are confusing. Knocking it all down to
+  just one transformer reduces complexity, significantly.
+\item
+  It's not just simpler for you. It's simpler for GHC too, which tends
+  to have a much better time optimizing one-layer \texttt{ReaderT} code
+  versus 5-transformer-deep code.
+\end{itemize}
+By the way, once you've bought into \texttt{ReaderT}, you can just throw
+it away entirely, and manually pass your \texttt{Env} around. Most of us
+don't do that, because it feels masochistic (imagine having to tell
+\emph{every call to \texttt{logDebug}} where to get the logging
+function). But if you're trying to write a simpler codebase that doesn't
+require understanding of transformers, it's now within your grasp.
+
+\section{Has typeclass approach}
+
+Let's say we're going to expand our mutable variable example above to
+include a logging function. It may look something like this:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+{-# LANGUAGE FlexibleContexts #-}
+import Control.Concurrent.Async.Lifted.Safe
+import Control.Monad.Reader
+import Control.Concurrent.STM
+import Say
+
+data Env = Env
+  { envLog :: !(String -> IO ())
+  , envBalance :: !(TVar Int)
+  }
+
+modify :: (MonadReader Env m, MonadIO m)
+       => (Int -> Int)
+       -> m ()
+modify f = do
+  env <- ask
+  liftIO $ atomically $ modifyTVar' (envBalance env) f
+
+logSomething :: (MonadReader Env m, MonadIO m)
+             => String
+             -> m ()
+logSomething msg = do
+  env <- ask
+  liftIO $ envLog env msg
+
+main :: IO ()
+main = do
+  ref <- newTVarIO 4
+  let env = Env
+        { envLog = sayString
+        , envBalance = ref
+        }
+  runReaderT
+    (concurrently
+      (modify (+ 1))
+      (logSomething "Increasing account balance"))
+    env
+  balance <- readTVarIO ref
+  sayString $ "Final balance: " ++ show balance
+\end{minted}
+Your first reaction to this is probably that defining this \texttt{Env}
+data type for your application looks like overhead and boilerplate.
+You're right, it is. Like I said above though, it's better to just suck
+up some of the pain initially to make a better long-term application
+development practice. Now let me double down on that...
+
+There's a bigger problem with this code: it's \emph{too coupled}. Our
+\texttt{modify} function takes in an entire \texttt{Env} value, even
+though it never uses the logging function. And similarly,
+\texttt{logSomething} never uses the mutable variable it's provided.
+Exposing too much state to a function is bad:
+
+\begin{itemize}
+
+\item
+  We can't, from the type signature, get any idea about what the code is
+  doing
+\item
+  It's more difficult to test. In order to see if \texttt{modify} is
+  doing the right thing, we need to provide it some garbage logging
+  function.
+\end{itemize}
+So let's double down on that boilerplate, and use the \texttt{Has}
+typeclass trick. This composes well with \texttt{MonadReader} and other
+mtl classes like \texttt{MonadThrow} and \texttt{MonadIO} to allow us to
+state \emph{exactly} what our function needs, at the cost of having to
+define a lot of typeclasses upfront. Let's see how this looks:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+import Control.Concurrent.Async.Lifted.Safe
+import Control.Monad.Reader
+import Control.Concurrent.STM
+import Say
+
+data Env = Env
+  { envLog :: !(String -> IO ())
+  , envBalance :: !(TVar Int)
+  }
+
+class HasLog a where
+  getLog :: a -> (String -> IO ())
+instance HasLog (String -> IO ()) where
+  getLog = id
+instance HasLog Env where
+  getLog = envLog
+
+class HasBalance a where
+  getBalance :: a -> TVar Int
+instance HasBalance (TVar Int) where
+  getBalance = id
+instance HasBalance Env where
+  getBalance = envBalance
+
+modify :: (MonadReader env m, HasBalance env, MonadIO m)
+       => (Int -> Int)
+       -> m ()
+modify f = do
+  env <- ask
+  liftIO $ atomically $ modifyTVar' (getBalance env) f
+
+logSomething :: (MonadReader env m, HasLog env, MonadIO m)
+             => String
+             -> m ()
+logSomething msg = do
+  env <- ask
+  liftIO $ getLog env msg
+
+main :: IO ()
+main = do
+  ref <- newTVarIO 4
+  let env = Env
+        { envLog = sayString
+        , envBalance = ref
+        }
+  runReaderT
+    (concurrently
+      (modify (+ 1))
+      (logSomething "Increasing account balance"))
+    env
+  balance <- readTVarIO ref
+  sayString $ "Final balance: " ++ show balance
+\end{minted}
+Holy creeping boilerplate batman! Yes, type signatures get longer, rote
+instances get written. But our type signatures are now deeply
+informative, and we can test our functions with ease, e.g.:
+
+\begin{minted}{haskell}
+main :: IO ()
+main = hspec $ do
+  describe "modify" $ do
+    it "works" $ do
+      var <- newTVarIO (1 :: Int)
+      runReaderT (modify (+ 2)) var
+      res <- readTVarIO var
+      res `shouldBe` 3
+  describe "logSomething" $ do
+    it "works" $ do
+      var <- newTVarIO ""
+      let logFunc msg = atomically $ modifyTVar var (++ msg)
+          msg1 = "Hello "
+          msg2 = "World\n"
+      runReaderT (logSomething msg1 >> logSomething msg2) logFunc
+      res <- readTVarIO var
+      res `shouldBe` (msg1 ++ msg2)
+\end{minted}
+And if defining all of these classes manually bothers you, or you're
+just a big fan of the library, you're free to use lens:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+import Control.Concurrent.Async.Lifted.Safe
+import Control.Monad.Reader
+import Control.Concurrent.STM
+import Say
+import Control.Lens
+import Prelude hiding (log)
+
+data Env = Env
+  { envLog :: !(String -> IO ())
+  , envBalance :: !(TVar Int)
+  }
+
+makeLensesWith camelCaseFields ''Env
+
+modify :: (MonadReader env m, HasBalance env (TVar Int), MonadIO m)
+       => (Int -> Int)
+       -> m ()
+modify f = do
+  env <- ask
+  liftIO $ atomically $ modifyTVar' (env^.balance) f
+
+logSomething :: (MonadReader env m, HasLog env (String -> IO ()), MonadIO m)
+             => String
+             -> m ()
+logSomething msg = do
+  env <- ask
+  liftIO $ (env^.log) msg
+
+main :: IO ()
+main = do
+  ref <- newTVarIO 4
+  let env = Env
+        { envLog = sayString
+        , envBalance = ref
+        }
+  runReaderT
+    (concurrently
+      (modify (+ 1))
+      (logSomething "Increasing account balance"))
+    env
+  balance <- readTVarIO ref
+  sayString $ "Final balance: " ++ show balance
+\end{minted}
+In our case, where \texttt{Env} doesn't have any immutable config-style
+data in it, the advantages of the lens approach aren't as apparent. But
+if you have some deeply nested config value, and especially want to play
+around with using \texttt{local} to tweak some values in it throughout
+your application, the lens approach can pay off.
+
+So to summarize: this approach really is about biting the bullet and
+absorbing some initial pain and boilerplate. I argue that the myriad
+benefits you get from it during app development are well worth it.
+Remember: you'll pay that upfront cost \emph{once}, you'll reap its
+rewards daily.
+
+\section{Regain purity}
+
+It's unfortunate that our \texttt{modify} function has a
+\texttt{MonadIO} constraint on it. Even though our real implementation
+requires \texttt{IO} to perform side-effects (specifically, to read and
+write a \texttt{TVar}), we've now infected all callers of the function
+by saying ``we have the right to perform \emph{any} side-effects,
+including launching the missiles, or worse, throwing a runtime
+exception''. Can we regain some level of purity? The answer is yes, it
+just requires a bit more boilerplate:
+
+\begin{minted}{haskell}
+#!/usr/bin/env stack
+-- stack --resolver lts-8.12 script
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+import Control.Concurrent.Async.Lifted.Safe
+import Control.Monad.Reader
+import qualified Control.Monad.State.Strict as State
+import Control.Concurrent.STM
+import Say
+import Test.Hspec
+
+data Env = Env
+  { envLog :: !(String -> IO ())
+  , envBalance :: !(TVar Int)
+  }
+
+class HasLog a where
+  getLog :: a -> (String -> IO ())
+instance HasLog (String -> IO ()) where
+  getLog = id
+instance HasLog Env where
+  getLog = envLog
+
+class HasBalance a where
+  getBalance :: a -> TVar Int
+instance HasBalance (TVar Int) where
+  getBalance = id
+instance HasBalance Env where
+  getBalance = envBalance
+
+class Monad m => MonadBalance m where
+  modifyBalance :: (Int -> Int) -> m ()
+instance (HasBalance env, MonadIO m) => MonadBalance (ReaderT env m) where
+  modifyBalance f = do
+    env <- ask
+    liftIO $ atomically $ modifyTVar' (getBalance env) f
+instance Monad m => MonadBalance (State.StateT Int m) where
+  modifyBalance = State.modify
+
+modify :: MonadBalance m => (Int -> Int) -> m ()
+modify f = do
+  -- Now I know there's no way I'm performing IO here
+  modifyBalance f
+
+logSomething :: (MonadReader env m, HasLog env, MonadIO m)
+             => String
+             -> m ()
+logSomething msg = do
+  env <- ask
+  liftIO $ getLog env msg
+
+main :: IO ()
+main = hspec $ do
+  describe "modify" $ do
+    it "works, IO" $ do
+      var <- newTVarIO (1 :: Int)
+      runReaderT (modify (+ 2)) var
+      res <- readTVarIO var
+      res `shouldBe` 3
+  it "works, pure" $ do
+      let res = State.execState (modify (+ 2)) (1 :: Int)
+      res `shouldBe` 3
+  describe "logSomething" $ do
+    it "works" $ do
+      var <- newTVarIO ""
+      let logFunc msg = atomically $ modifyTVar var (++ msg)
+          msg1 = "Hello "
+          msg2 = "World\n"
+      runReaderT (logSomething msg1 >> logSomething msg2) logFunc
+      res <- readTVarIO var
+      res `shouldBe` (msg1 ++ msg2)
+\end{minted}
+It's silly in an example this short, since the entirety of the
+\texttt{modify} function is now in a typeclass. But with larger
+examples, you can see how we'd be able to specify that entire portions
+of our logic perform no arbitrary side-effects, while still using the
+\texttt{ReaderT} pattern to its fullest.
+
+To put this another way: the function
+\mintinline{haskell}{foo :: Monad m => Int -> m Double}
+may appear to be impure, because it lives in a \texttt{Monad}. But this
+isn't true: by giving it a constraint of ``any arbitrary instance of
+\texttt{Monad}'', we're stating ``this has no real side-effects''. After
+all, the type above unifies with \texttt{Identity}, which of course is
+pure.
+
+This example may seem a bit funny, but what about:
+\begin{minted}{haskell}
+parseInt :: MonadThrow m => Text -> m Int
+\end{minted}
+You may think ``that's impure, it throws a runtime exception''. But the
+type unifies with
+\mintinline{haskell}{parseInt :: Text -> Maybe Int}, which of
+course is pure. We've gained a lot of knowledge about our function and
+can feel safe calling it.
+
+So the take-away here is: if you can generalize your functions to
+mtl-style \texttt{Monad} constraints, do it, you'll regain a lot of the
+benfits you'd have with purity.
+
+\section{Analysis}
+
+While the technique here is certainly a bit heavy-handed, for any
+large-scale application or library development that cost will be
+amortized. I've found the benefits of working in this style to far
+outweigh the costs in many real world projects.
+
+There are other problems it causes, like more confusing error messages
+and more cognitive overhead for someone joining the project. But in my
+experience, once someone is onboarded to the approach, it works out
+well.
+
+In addition to the concrete benefits I listed above, using this approach
+automatically navigates you around many common monad transformer stack
+pain points that you'll see people experiencing in the real world. I
+encourage others to share their real-world examples of them. I
+personally haven't hit those problems in a long while, since I've stuck
+to this approach.
+
+\section{Post-publish updates}
+
+\textbf{June 15, 2017} The comment below from Ashley about
+ImplicitParams spawned a
+\href{https://www.reddit.com/r/haskell/comments/6gz4w5/whats_wrong_with_implicitparams/}{Reddit
+discussion about the problems with that extension}. Please do read the
+discussion yourself, but the takeaway for me is that
+\texttt{MonadReader} is a better
+choice.

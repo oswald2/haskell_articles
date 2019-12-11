@@ -242,5 +242,6 @@ TSWLatexianTemp*
 *.spl
 tmp/
 git_hash.tex
+git_tag.tex
 *~
 
